@@ -287,13 +287,15 @@ const ExaminationCalendar: React.FC<ExaminationCalendarProps> = ({
             const response = await fetch(`${API_BASE}/common/exam-calendars/${eventToDelete.id}`, {
                 method: 'DELETE',
                 headers: {
+                    'Content-Type': 'application/json',
                     'Authorization': `Bearer ${token}`
                 },
-                body: subjectToCreate,
+                body: JSON.stringify({ subjectId: subjectToCreate }),
             });
 
             if (!response.ok) {
-                throw new Error('No se pudo eliminar el evento', { cause: response.status });
+                const data = await response.json().catch(() => ({}));
+                throw new Error(data.message || 'No se pudo eliminar el evento');
             }
 
             setEvents((prev) => prev.filter((event) => event._id !== eventToDelete.id));
@@ -340,34 +342,32 @@ const ExaminationCalendar: React.FC<ExaminationCalendarProps> = ({
         <Card elevation={0} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
             <CardContent>
                 <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mb: 2 }}>
-                    <FormControl fullWidth disabled={!!fixedSubjectId || loading || submitting}>
-                        <InputLabel id="calendar-subject-label">Asignatura</InputLabel>
-                        <Select
-                            labelId="calendar-subject-label"
-                            value={fixedSubjectId ? fixedSubjectId : selectedSubjectId}
-                            label="Asignatura"
-                            onChange={handleSubjectChange}
-                        >
-                            {!fixedSubjectId && subjects.length === 0 && (
-                                <MenuItem value="" disabled>
-                                    No hay opciones para mostrar
-                                </MenuItem>
-                            )}
-                            {!fixedSubjectId && subjects.map((subject) => (
-                                <MenuItem key={subject._id} value={subject._id}>
-                                    {subject.name}
-                                </MenuItem>
-                            ))}
-                            {fixedSubjectId && (
-                                <MenuItem value={fixedSubjectId}>
-                                    {fixedSubjectName || 'Asignatura seleccionada'}
-                                </MenuItem>
-                            )}
-                        </Select>
-                    </FormControl>
+                    {!fixedSubjectId && (
+                        <FormControl fullWidth disabled={loading || submitting}>
+                            <InputLabel id="calendar-subject-label">Asignatura</InputLabel>
+                            <Select
+                                labelId="calendar-subject-label"
+                                value={selectedSubjectId}
+                                label="Asignatura"
+                                onChange={handleSubjectChange}
+                            >
+                                {subjects.length === 0 ? (
+                                    <MenuItem value="" disabled>
+                                        No hay opciones para mostrar
+                                    </MenuItem>
+                                ) : (
+                                    subjects.map((subject) => (
+                                        <MenuItem key={subject._id} value={subject._id}>
+                                            {subject.name}
+                                        </MenuItem>
+                                    ))
+                                )}
+                            </Select>
+                        </FormControl>
+                    )}
 
                     {!readOnly && (
-                        <FormControl fullWidth disabled={loading || submitting}>
+                        <FormControl fullWidth sx={{ maxWidth: { md: 400 } }} disabled={loading || submitting}>
                             <InputLabel id="calendar-exam-type-label">Tipo de examen</InputLabel>
                             <Select
                                 labelId="calendar-exam-type-label"
@@ -427,6 +427,11 @@ const ExaminationCalendar: React.FC<ExaminationCalendarProps> = ({
                             }}
                             onSelectSlot={readOnly ? undefined : handleCreateEvent}
                             onSelectEvent={readOnly ? undefined : (selectedEvent) => {
+                                const eventSubjectId = getEntityId(selectedEvent.resource.subjectId);
+                                if (subjectToCreate && eventSubjectId && subjectToCreate !== eventSubjectId) {
+                                    setError('No tienes los permisos para borrar este examen porque no pertenece a la asignatura especificada.');
+                                    return;
+                                }
                                 setEventToDelete(selectedEvent);
                                 setDeleteModalOpen(true);
                             }}

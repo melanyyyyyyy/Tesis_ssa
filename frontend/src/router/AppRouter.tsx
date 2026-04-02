@@ -11,6 +11,7 @@ import SigenuPendingPage from '../pages/secretary/SigenuPendingPage';
 import EvaluationsToExportPage from '../pages/secretary/EvaluationsToExportPage';
 import LastExportPage from '../pages/secretary/LastExportPage';
 import ExamCalendarPage from '../pages/secretary/ExamCalendarPage';
+import ProfessorExamCalendarPage from '../pages/professor/ExamCalendarPage';
 import ProfilePage from '../pages/common/ProfilePage';
 import NotificationPage from '../pages/common/NotificationPage';
 import ProfessorDashboard from '../pages/professor/ProfessorDashboard';
@@ -70,6 +71,7 @@ export default function AppRouter() {
           <Route path="/" element={<Navigate to="/professor/dashboard" replace />} />
           <Route path="/professor/dashboard" element={<ProfessorDashboard />} />
           <Route path="/professor/subject-detail" element={<SubjectDetail />} />
+          <Route path="/professor/exams" element={<ProfessorExamCalendarPage />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/login" replace />} />

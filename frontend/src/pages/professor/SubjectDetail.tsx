@@ -178,6 +178,17 @@ const SubjectDetail: React.FC = () => {
                         color="primary"
                         disableElevation
                         startIcon={<CalendarIcon />}
+                        disabled={!selectedSubject}
+                        onClick={() => selectedSubject && navigate('/professor/exams', {
+                            state: {
+                                subjectId: selectedSubject._id,
+                                subjectName: selectedSubject.name,
+                                careerId: typeof selectedSubject.careerId === 'string' 
+                                    ? selectedSubject.careerId 
+                                    : selectedSubject.careerId?._id || '',
+                                academicYear: selectedSubject.academicYear
+                            }
+                        })}
                     >
                         Calendario de exámenes
                     </Button>

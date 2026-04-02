@@ -195,7 +195,7 @@ export const createExamCalendarEvent = async (req: Request, res: Response) => {
 export const deleteExamCalendarEvent = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const subjectId = req.body;
+    const { subjectId } = req.body;
 
     if (subjectId) {
       const examEvent = await ExamCalendarModel.findById(id);
