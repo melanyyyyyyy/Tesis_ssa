@@ -14,6 +14,7 @@ import ExamCalendarPage from '../pages/secretary/ExamCalendarPage';
 import ProfilePage from '../pages/common/ProfilePage';
 import NotificationPage from '../pages/common/NotificationPage';
 import ProfessorDashboard from '../pages/professor/ProfessorDashboard';
+import SubjectDetail from '../pages/professor/SubjectDetail';
 
 const ProtectedRoute = ({ allowedRoles }: { allowedRoles?: string[] }) => {
   const { isAuthenticated, isLoading, user } = useAuth(); 
@@ -68,6 +69,7 @@ export default function AppRouter() {
         <Route element={<ProtectedRoute allowedRoles={['professor']} />}>
           <Route path="/" element={<Navigate to="/professor/dashboard" replace />} />
           <Route path="/professor/dashboard" element={<ProfessorDashboard />} />
+          <Route path="/professor/subject-detail" element={<SubjectDetail />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/login" replace />} />

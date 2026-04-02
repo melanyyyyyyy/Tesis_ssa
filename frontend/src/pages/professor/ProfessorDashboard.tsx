@@ -26,6 +26,8 @@ interface ProfessorSubject {
     } | string;
 }
 
+const SUBJECT_STORAGE_KEY = 'professorSelectedSubject';
+
 const ProfessorDashboard: React.FC = () => {
     const theme = useTheme();
     const { user, token, logout } = useAuth();
@@ -51,9 +53,12 @@ const ProfessorDashboard: React.FC = () => {
         {
             variant: 'view',
             label: 'Ver más',
-            onClick: (row) => navigate(`/professor/subject/${row._id}`)
+            onClick: (row) => {
+                localStorage.setItem(SUBJECT_STORAGE_KEY, JSON.stringify(row));
+                navigate('/professor/subject-detail', { state: { subject: row } });
+            }
         }
-    ], []);
+    ], [navigate]);
 
     const handleRefresh = () => {
         setRefreshKey((prev) => prev + 1);
