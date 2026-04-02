@@ -81,11 +81,6 @@ const getEntityId = (value: EntityInput | undefined): string | null => {
     return value._id;
 };
 
-const getEntityName = (value: EntityInput | undefined): string | null => {
-    if (!value || typeof value === 'string') return null;
-    return value.name || null;
-};
-
 const ExaminationCalendar: React.FC<ExaminationCalendarProps> = ({
     carrera,
     asignatura,
@@ -109,7 +104,6 @@ const ExaminationCalendar: React.FC<ExaminationCalendarProps> = ({
 
     const careerId = useMemo(() => getEntityId(carrera), [carrera]);
     const fixedSubjectId = useMemo(() => getEntityId(asignatura), [asignatura]);
-    const fixedSubjectName = useMemo(() => getEntityName(asignatura), [asignatura]);
 
     const fetchEvents = useCallback(async () => {
         if (!token || !careerId) return;

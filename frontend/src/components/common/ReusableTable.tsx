@@ -185,7 +185,6 @@ const ReusableTable = <T extends object>({
             if (!token) {
                 setRows([]);
                 setTotalCount(0);
-                setLoading(false);
                 return;
             }
 
@@ -219,6 +218,7 @@ const ReusableTable = <T extends object>({
 
                 setRows(extractedRows);
                 setTotalCount(serverPagination ? extractedTotal : extractedRows.length);
+                setLoading(false);
             } catch (err) {
                 if (err instanceof Error && err.name === 'AbortError') {
                     return;
@@ -226,7 +226,6 @@ const ReusableTable = <T extends object>({
                 setRows([]);
                 setTotalCount(0);
                 setError(err instanceof Error ? err.message : 'Error desconocido');
-            } finally {
                 setLoading(false);
             }
         };
