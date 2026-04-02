@@ -1,0 +1,46 @@
+@font-face {
+    font-family: "Museo Sans";
+    src: url("../assets/fonts/MuseoSans-100.otf") format("opentype");
+    font-weight: 100;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: "Museo Sans";
+    src: url("../assets/fonts/MuseoSans-300.otf") format("opentype");
+    font-weight: 300;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: "Museo Sans";
+    src: url("../assets/fonts/MuseoSans-500.otf") format("opentype");
+    font-weight: 500;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: "Museo Sans";
+    src: url("../assets/fonts/MuseoSans-700.otf") format("opentype");
+    font-weight: 700;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: "Museo Sans";
+    src: url("../assets/fonts/MuseoSans-900.otf") format("opentype");
+    font-weight: 900;
+    font-style: normal;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html,
+body {
+    height: 100%;
+    width: 100%;
+}
