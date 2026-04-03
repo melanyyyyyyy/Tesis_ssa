@@ -217,6 +217,10 @@ const SubjectDetail: React.FC = () => {
                         color="primary"
                         disableElevation
                         startIcon={<RankingIcon />}
+                        disabled={!selectedSubject}
+                        onClick={() => selectedSubject && navigate('/professor/academic-ranking', {
+                            state: { subject: selectedSubject }
+                        })}
                     >
                         Escalafón Académico
                     </Button>

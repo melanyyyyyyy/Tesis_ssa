@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import {
+    getAcademicRanking,
     getProfessorSubjects,
     getStudentAttendanceRecords,
     getStudentEvaluationRecords,
@@ -17,6 +18,7 @@ router.use(authorize(['professor']));
 
 router.get('/subjects', getProfessorSubjects);
 router.get('/subject-students', getSubjectStudentsSummary);
+router.get('/academic-ranking', getAcademicRanking);
 router.get('/student-evaluation-records', getStudentEvaluationRecords);
 router.get('/student-attendance-records', getStudentAttendanceRecords);
 router.get('/evaluation-register-data', getSubjectEvaluationRegisterData);

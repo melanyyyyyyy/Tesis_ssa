@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import {
+    EvaluationModel,
     EvaluationValueModel,
     ExaminationTypeModel,
     MatriculatedSubjectModel,
@@ -105,10 +106,48 @@ const calculateSubjectEvaluationAverageForStudent = (
         });
     });
 
-    const systematicAverage = average(systematic);
-    const partialAverage = average(partial);
-    const finalScore = final.length > 0 ? Math.max(...final) : 2;
-    return Math.max(2, Math.min(5, Number(((systematicAverage * 0.2) + (partialAverage * 0.3) + (finalScore * 0.5)).toFixed(2))));
+    const weights = {
+        systematic: 0.2,
+        partial: 0.3,
+        final: 0.5
+    };
+
+    const sAvg = systematic.length > 0 ? average(systematic) : null;
+    const pAvg = partial.length > 0 ? average(partial) : null;
+    const fScore = final.length > 0 ? Math.max(...final) : null;
+
+    let totalWeightUsed = 0;
+    let weightedSum = 0;
+
+    if (sAvg !== null) {
+        weightedSum += sAvg * weights.systematic;
+        totalWeightUsed += weights.systematic;
+    }
+    if (pAvg !== null) {
+        weightedSum += pAvg * weights.partial;
+        totalWeightUsed += weights.partial;
+    }
+    if (fScore !== null) {
+        weightedSum += fScore * weights.final;
+        totalWeightUsed += weights.final;
+    }
+
+    if (totalWeightUsed === 0) return 2;
+
+    const finalResult = weightedSum / totalWeightUsed;
+
+    return Math.max(2, Math.min(5, Number(finalResult.toFixed(2))));
+};
+
+const hasEvaluationsForSubjectStudent = (
+    subjectId: string,
+    studentId: string,
+    matriculatedIdsBySubjectStudent: Map<string, string[]>,
+    evaluationRowsByMatriculated: Map<string, EvaluationRowForAverage[]>
+) => {
+    const key = getSubjectStudentKey(subjectId, studentId);
+    const matriculatedIds = matriculatedIdsBySubjectStudent.get(key) || [];
+    return matriculatedIds.some((matriculatedId) => (evaluationRowsByMatriculated.get(matriculatedId) || []).length > 0);
 };
 
 const getDayRange = (dateValue?: string) => {
@@ -405,6 +444,242 @@ export async function getStudentAttendanceRecords(req: Request, res: Response) {
         return res.status(500).json({
             success: false,
             error: error.message || 'Failed to get student attendance records.'
+        });
+    }
+}
+
+export async function getAcademicRanking(req: Request, res: Response) {
+    try {
+        const professorId = req.user?.id;
+        const subjectId = req.query.subjectId as string | undefined;
+        const page = parseInt(req.query.page as string) || 0;
+        const limit = parseInt(req.query.limit as string) || 50;
+
+        if (!professorId) {
+            return res.status(401).json({ message: 'Usuario no autenticado' });
+        }
+
+        if (!subjectId) {
+            return res.status(400).json({ message: 'subjectId es requerido' });
+        }
+
+        const subject = await SubjectModel.findOne({ _id: subjectId, professorId })
+            .select('_id name academicYear careerId')
+            .populate('careerId', 'name')
+            .lean();
+
+        if (!subject) {
+            return res.status(404).json({ message: 'Asignatura no encontrada para el profesor autenticado' });
+        }
+
+        const subjectCareerId = typeof subject.careerId === 'object' && subject.careerId
+            ? String((subject.careerId as { _id?: unknown })._id || '')
+            : String(subject.careerId || '');
+
+        const validStudents = await StudentModel.find({
+            careerId: subjectCareerId,
+            academicYear: subject.academicYear
+        })
+            .select('_id')
+            .lean();
+
+        const validStudentIds = validStudents.map((student) => student._id);
+        const currentSubjectEnrollments = await MatriculatedSubjectModel.find({
+            subjectId,
+            studentId: { $in: validStudentIds },
+            academicYear: subject.academicYear
+        })
+            .populate('studentId', 'firstName lastName')
+            .sort({ _id: 1 })
+            .lean();
+
+        const totalCount = currentSubjectEnrollments.length;
+        if (totalCount === 0) {
+            return res.status(200).json({
+                subject: {
+                    _id: String(subject._id),
+                    name: subject.name,
+                    academicYear: subject.academicYear,
+                    careerName: typeof subject.careerId === 'object' && subject.careerId
+                        ? (subject.careerId as { name?: string }).name || 'Sin carrera'
+                        : 'Sin carrera'
+                },
+                data: [],
+                totalCount: 0,
+                page,
+                limit
+            });
+        }
+
+        const enrolledStudentIds = currentSubjectEnrollments
+            .map((item) => {
+                const studentRecord = item.studentId as unknown as Record<string, unknown> | null;
+                return studentRecord?._id ? String(studentRecord._id) : '';
+            })
+            .filter(Boolean);
+
+        const allMatriculatedForStudents = await MatriculatedSubjectModel.find({
+            studentId: { $in: enrolledStudentIds }
+        })
+            .select('_id subjectId studentId')
+            .lean();
+
+        const allMatriculatedIds = allMatriculatedForStudents.map((item) => item._id);
+        const [evaluationScoreRows, legacyEvaluationRows] = await Promise.all([
+            EvaluationScoreModel.find({
+                matriculatedSubjectId: { $in: allMatriculatedIds }
+            })
+                .populate('evaluationValueId', 'value')
+                .select('matriculatedSubjectId category evaluationValueId')
+                .lean(),
+            EvaluationModel.find({
+                matriculatedSubjectId: { $in: allMatriculatedIds }
+            })
+                .populate('evaluationValueId', 'value')
+                .select('matriculatedSubjectId evaluationValueId')
+                .lean()
+        ]);
+
+
+
+        const matriculatedIdsBySubjectStudent = new Map<string, string[]>();
+        const subjectIdsByStudent = new Map<string, Set<string>>();
+
+        allMatriculatedForStudents.forEach((item) => {
+            const studentKey = String(item.studentId);
+            const itemSubjectId = String(item.subjectId);
+            const key = getSubjectStudentKey(itemSubjectId, studentKey);
+            const current = matriculatedIdsBySubjectStudent.get(key) || [];
+            current.push(String(item._id));
+            matriculatedIdsBySubjectStudent.set(key, current);
+
+            const studentSubjects = subjectIdsByStudent.get(studentKey) || new Set<string>();
+            studentSubjects.add(itemSubjectId);
+            subjectIdsByStudent.set(studentKey, studentSubjects);
+        });
+
+        //
+        const studentNameById = new Map<string, string>();
+        currentSubjectEnrollments.forEach((item) => {
+            const studentRecord = item.studentId as unknown as Record<string, unknown> | null;
+            const studentIdValue = studentRecord?._id ? String(studentRecord._id) : '';
+            if (!studentIdValue) return;
+            const studentName = `${(studentRecord?.firstName as string) || ''} ${(studentRecord?.lastName as string) || ''}`.trim() || 'Sin nombre';
+            studentNameById.set(studentIdValue, studentName);
+        });
+
+        const studentIdByMatriculatedId = new Map<string, string>();
+        const subjectIdByMatriculatedId = new Map<string, string>();
+        allMatriculatedForStudents.forEach((item) => {
+            studentIdByMatriculatedId.set(String(item._id), String(item.studentId));
+            subjectIdByMatriculatedId.set(String(item._id), String(item.subjectId));
+        });
+
+        const uniqueSubjectIds = Array.from(new Set(
+            allMatriculatedForStudents.map((item) => String(item.subjectId))
+        ));
+        const subjectsForLog = await SubjectModel.find({ _id: { $in: uniqueSubjectIds } })
+            .select('_id name')
+            .lean();
+        const subjectNameById = new Map<string, string>();
+        subjectsForLog.forEach((item) => {
+            subjectNameById.set(String(item._id), item.name || 'Sin asignatura');
+        });
+
+        //
+        const evaluationRowsByMatriculated = new Map<string, EvaluationRowForAverage[]>();
+        evaluationScoreRows.forEach((evaluation) => {
+            const key = String(evaluation.matriculatedSubjectId);
+            const current = evaluationRowsByMatriculated.get(key) || [];
+            current.push(evaluation as unknown as EvaluationRowForAverage);
+            evaluationRowsByMatriculated.set(key, current);
+        });
+
+        legacyEvaluationRows.forEach((evaluation) => {
+            const key = String(evaluation.matriculatedSubjectId);
+            const current = evaluationRowsByMatriculated.get(key) || [];
+            const hasFinalFromScore = current.some(
+                (row) => row.category === EvaluationCategory.FINAL_EVALUATION
+            );
+            if (hasFinalFromScore) return;
+
+            current.push({
+                matriculatedSubjectId: evaluation.matriculatedSubjectId,
+                category: EvaluationCategory.FINAL_EVALUATION,
+                evaluationValueId: evaluation.evaluationValueId as { value?: string } | null
+            });
+            evaluationRowsByMatriculated.set(key, current);
+        });
+
+        const rankingRows = currentSubjectEnrollments.map((item) => {
+            const studentRecord = item.studentId as unknown as Record<string, unknown> | null;
+            const studentIdValue = studentRecord?._id ? String(studentRecord._id) : '';
+            const studentName = `${(studentRecord?.firstName as string) || ''} ${(studentRecord?.lastName as string) || ''}`.trim() || 'Sin nombre';
+
+            const subjectAverage = calculateSubjectEvaluationAverageForStudent(
+                subjectId,
+                studentIdValue,
+                matriculatedIdsBySubjectStudent,
+                evaluationRowsByMatriculated
+            );
+
+            const studentSubjectIds = Array.from(subjectIdsByStudent.get(studentIdValue) || []);
+            const subjectAverages = studentSubjectIds
+                .filter((itemSubjectId) => hasEvaluationsForSubjectStudent(
+                    itemSubjectId,
+                    studentIdValue,
+                    matriculatedIdsBySubjectStudent,
+                    evaluationRowsByMatriculated
+                ))
+                .map((itemSubjectId) => calculateSubjectEvaluationAverageForStudent(
+                    itemSubjectId,
+                    studentIdValue,
+                    matriculatedIdsBySubjectStudent,
+                    evaluationRowsByMatriculated
+                ));
+
+            const generalAverage = subjectAverages.length > 0
+                ? Number(average(subjectAverages).toFixed(2))
+                : 2;
+
+            return {
+                _id: studentIdValue,
+                studentId: studentIdValue,
+                studentName,
+                subjectEvaluationAverage: subjectAverage,
+                generalAverage
+            };
+        });
+
+        rankingRows.sort((a, b) => {
+            if (b.generalAverage !== a.generalAverage) return b.generalAverage - a.generalAverage;
+            if (b.subjectEvaluationAverage !== a.subjectEvaluationAverage) return b.subjectEvaluationAverage - a.subjectEvaluationAverage;
+            return a.studentName.localeCompare(b.studentName, 'es');
+        });
+
+        const start = page * limit;
+        const end = start + limit;
+        const data = rankingRows.slice(start, end);
+
+        return res.status(200).json({
+            subject: {
+                _id: String(subject._id),
+                name: subject.name,
+                academicYear: subject.academicYear,
+                careerName: typeof subject.careerId === 'object' && subject.careerId
+                    ? (subject.careerId as { name?: string }).name || 'Sin carrera'
+                    : 'Sin carrera'
+            },
+            data,
+            totalCount,
+            page,
+            limit
+        });
+    } catch (error: any) {
+        console.error('Error in getAcademicRanking:', error);
+        return res.status(500).json({
+            success: false,
+            error: error.message || 'Failed to get academic ranking.'
         });
     }
 }
