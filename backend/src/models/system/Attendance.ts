@@ -50,9 +50,9 @@ const AttendanceSchema = new Schema<IAttendance>({
     collection: 'attendances'
 });
 
-AttendanceSchema.index({ studentId: 1, subjectId: 1, date: 1 }, { unique: true });
-AttendanceSchema.index({ studentId: 1, date: 1 });
-AttendanceSchema.index({ subjectId: 1, date: 1 });
+AttendanceSchema.index({ studentId: 1, subjectId: 1, attendanceDate: 1 }, { unique: true });
+AttendanceSchema.index({ studentId: 1, attendanceDate: 1 });
+AttendanceSchema.index({ subjectId: 1, attendanceDate: 1 });
 
 AttendanceSchema.methods.toJSON = function () {
     const obj = this.toObject();
@@ -72,6 +72,10 @@ AttendanceSchema.pre('save', async function (this: IAttendance) {
             `The student does not have the subject enrolled. ` +
             `StudentId: ${this.studentId}, SubjectId: ${this.subjectId}`
         );
+    }
+
+    if (this.attendanceDate) {
+        this.attendanceDate.setUTCHours(0, 0, 0, 0);
     }
 });
 

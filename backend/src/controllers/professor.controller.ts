@@ -252,6 +252,126 @@ export async function getSubjectStudentsSummary(req: Request, res: Response) {
     }
 }
 
+export async function getStudentEvaluationRecords(req: Request, res: Response) {
+    try {
+        const professorId = req.user?.id;
+        const subjectId = req.query.subjectId as string | undefined;
+        const studentId = req.query.studentId as string | undefined;
+        const page = parseInt(req.query.page as string) || 0;
+        const limit = parseInt(req.query.limit as string) || 50;
+        const skip = page * limit;
+
+        if (!professorId) {
+            return res.status(401).json({ message: 'Usuario no autenticado' });
+        }
+
+        if (!subjectId || !studentId) {
+            return res.status(400).json({ message: 'subjectId y studentId son requeridos' });
+        }
+
+        const subject = await SubjectModel.findOne({ _id: subjectId, professorId })
+            .select('_id')
+            .lean();
+
+        if (!subject) {
+            return res.status(404).json({ message: 'Asignatura no encontrada para el profesor autenticado' });
+        }
+
+        const matriculatedSubjects = await MatriculatedSubjectModel.find({ subjectId, studentId })
+            .select('_id')
+            .lean();
+
+        const matriculatedIds = matriculatedSubjects.map((item) => item._id);
+        if (matriculatedIds.length === 0) {
+            return res.status(200).json({
+                data: [],
+                totalCount: 0,
+                page,
+                limit
+            });
+        }
+
+        const filter = {
+            studentId,
+            matriculatedSubjectId: { $in: matriculatedIds }
+        };
+
+        const [rows, totalCount] = await Promise.all([
+            EvaluationScoreModel.find(filter)
+                .populate('evaluationValueId', 'value')
+                .populate('examinationTypeId', 'name')
+                .sort({ evaluationDate: -1, updatedAt: -1 })
+                .skip(skip)
+                .limit(limit)
+                .lean(),
+            EvaluationScoreModel.countDocuments(filter)
+        ]);
+
+        return res.status(200).json({
+            data: rows,
+            totalCount,
+            page,
+            limit
+        });
+    } catch (error: any) {
+        console.error('Error in getStudentEvaluationRecords:', error);
+        return res.status(500).json({
+            success: false,
+            error: error.message || 'Failed to get student evaluation records.'
+        });
+    }
+}
+
+export async function getStudentAttendanceRecords(req: Request, res: Response) {
+    try {
+        const professorId = req.user?.id;
+        const subjectId = req.query.subjectId as string | undefined;
+        const studentId = req.query.studentId as string | undefined;
+        const page = parseInt(req.query.page as string) || 0;
+        const limit = parseInt(req.query.limit as string) || 50;
+        const skip = page * limit;
+
+        if (!professorId) {
+            return res.status(401).json({ message: 'Usuario no autenticado' });
+        }
+
+        if (!subjectId || !studentId) {
+            return res.status(400).json({ message: 'subjectId y studentId son requeridos' });
+        }
+
+        const subject = await SubjectModel.findOne({ _id: subjectId, professorId })
+            .select('_id')
+            .lean();
+
+        if (!subject) {
+            return res.status(404).json({ message: 'Asignatura no encontrada para el profesor autenticado' });
+        }
+
+        const filter = { subjectId, studentId };
+        const [rows, totalCount] = await Promise.all([
+            AttendanceModel.find(filter)
+                .sort({ attendanceDate: -1, updatedAt: -1 })
+                .skip(skip)
+                .limit(limit)
+                .lean(),
+            AttendanceModel.countDocuments(filter)
+        ]);
+
+        return res.status(200).json({
+            data: rows,
+            totalCount,
+            page,
+            limit
+        });
+    } catch (error: any) {
+        console.error('Error in getStudentAttendanceRecords:', error);
+        return res.status(500).json({
+            success: false,
+            error: error.message || 'Failed to get student attendance records.'
+        });
+    }
+}
+
 export async function getSubjectEvaluationRegisterData(req: Request, res: Response) {
     try {
         const professorId = req.user?.id;
@@ -526,6 +646,13 @@ export async function upsertSubjectEvaluationRegister(req: Request, res: Respons
             }
         }
 
+        if (savedRows.length === 0) {
+            return res.status(400).json({
+                success: false,
+                error: 'No se guardó ningún registro de asistencia.'
+            });
+        }
+
         return res.status(200).json({
             success: true,
             savedCount: savedRows.length,
@@ -713,6 +840,29 @@ export async function upsertSubjectAttendanceRegister(req: Request, res: Respons
 
         const validStudentIds = validStudents.map((student) => String(student._id));
         const validStudentIdSet = new Set(validStudentIds);
+        const isCreateMode = entries.every((entry) => !entry?.attendanceId);
+        const requestedStudentIds = entries
+            .map((entry) => String(entry?.studentId || ''))
+            .filter((id) => id && validStudentIdSet.has(id));
+
+        if (isCreateMode && requestedStudentIds.length > 0) {
+            const existingCount = await AttendanceModel.countDocuments({
+                subjectId,
+                studentId: { $in: requestedStudentIds },
+                attendanceDate: {
+                    $gte: dateRange.start,
+                    $lte: dateRange.end
+                }
+            });
+
+            if (existingCount > 0) {
+                return res.status(409).json({
+                    success: false,
+                    error: 'Ya existe un registro de asistencia para esa fecha. Usa la opción de editar para modificarlo.'
+                });
+            }
+        }
+
         const savedRows: unknown[] = [];
 
         for (const entry of entries) {

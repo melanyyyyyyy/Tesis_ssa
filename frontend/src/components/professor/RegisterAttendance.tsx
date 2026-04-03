@@ -233,6 +233,9 @@ const RegisterAttendance: React.FC<RegisterAttendanceProps> = ({
             if (!response.ok) {
                 throw new Error(result?.message || result?.error || 'No se pudo guardar el registro de asistencia');
             }
+            if (typeof result?.savedCount === 'number' && result.savedCount === 0) {
+                throw new Error('No se guardó ningún registro de asistencia.');
+            }
 
             setSuccess('Asistencias registradas exitosamente. Redirigiendo...');
             setIsRedirecting(true);

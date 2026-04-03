@@ -54,7 +54,6 @@ const SubjectDetail: React.FC = () => {
     const location = useLocation();
     const { token, logout } = useAuth();
     const [refreshKey, setRefreshKey] = useState(0);
-    const [selectedStudent, setSelectedStudent] = useState<StudentSubjectSummary | null>(null);
     const selectedSubject = useMemo(() => {
         const state = location.state as { subject?: SubjectReference } | null;
         if (state?.subject) {
@@ -89,9 +88,17 @@ const SubjectDetail: React.FC = () => {
         {
             variant: 'view',
             label: 'Ver más',
-            onClick: (row) => setSelectedStudent(row)
+            onClick: (row) => {
+                if (!selectedSubject) return;
+                navigate('/professor/student-detail', {
+                    state: {
+                        subject: selectedSubject,
+                        studentSummary: row
+                    }
+                });
+            }
         }
-    ], []);
+    ], [navigate, selectedSubject]);
 
     const handleRefresh = () => {
         setRefreshKey((prev) => prev + 1);
