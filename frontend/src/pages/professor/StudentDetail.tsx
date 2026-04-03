@@ -7,8 +7,18 @@ import {
     Card,
     Container,
     Divider,
+    Dialog,
+    DialogActions,
+    DialogContent,
+    DialogTitle,
+    IconButton,
+    MenuItem,
+    TextField,
+    Stack,
+    Tooltip,
     Typography
 } from '@mui/material';
+import { Refresh as RefreshIcon } from '@mui/icons-material';
 import MainLayout from '../../layouts/MainLayout';
 import PageHeader from '../../components/common/PageHeader';
 import { useAuth } from '../../context/AuthContext';
@@ -45,6 +55,7 @@ interface EvaluationValueRef {
 
 interface EvaluationRecord {
     _id: string;
+    matriculatedSubjectId?: string;
     category: string;
     examinationTypeId?: EvaluationTypeRef | null;
     evaluationDate: string;
@@ -54,13 +65,30 @@ interface EvaluationRecord {
 
 interface AttendanceRecord {
     _id: string;
+    studentId?: string;
     attendanceDate: string;
     isPresent?: boolean;
     justified?: boolean;
     justificationReason?: string;
 }
 
+interface SelectOption {
+    _id: string;
+    value?: string;
+    name?: string;
+}
+
 const DETAIL_STORAGE_KEY = 'professorSelectedStudentDetail';
+const API_BASE = import.meta.env.VITE_API_BASE;
+
+const normalizeEvaluationValue = (value?: string) => (value || '').trim().toUpperCase();
+
+const getEvaluationValueLabel = (value?: string) => {
+    const normalized = normalizeEvaluationValue(value);
+    if (normalized === 'NP') return 'No presentado';
+    if (normalized === 'CO') return 'Convalidado';
+    return value || '';
+};
 
 const StudentDetail: React.FC = () => {
     const navigate = useNavigate();
@@ -68,6 +96,16 @@ const StudentDetail: React.FC = () => {
     const { token, logout } = useAuth();
     const [refreshKey, setRefreshKey] = useState(0);
     const [infoMessage, setInfoMessage] = useState<string | null>(null);
+    const [savingEdit, setSavingEdit] = useState(false);
+    const [evaluationDialogOpen, setEvaluationDialogOpen] = useState(false);
+    const [attendanceDialogOpen, setAttendanceDialogOpen] = useState(false);
+    const [selectedEvaluation, setSelectedEvaluation] = useState<EvaluationRecord | null>(null);
+    const [selectedAttendance, setSelectedAttendance] = useState<AttendanceRecord | null>(null);
+    const [evaluationValues, setEvaluationValues] = useState<SelectOption[]>([]);
+    const [selectedEvaluationValueId, setSelectedEvaluationValueId] = useState('');
+    const [attendanceIsPresent, setAttendanceIsPresent] = useState(false);
+    const [attendanceJustified, setAttendanceJustified] = useState(false);
+    const [attendanceReason, setAttendanceReason] = useState('');
 
     const detail = useMemo(() => {
         const state = location.state as StudentDetailState | null;
@@ -161,24 +199,178 @@ const StudentDetail: React.FC = () => {
         },
         {
             field: 'justificationReason',
-            headerName: 'Descripción',
+            headerName: 'Justificación de falta',
             renderCell: (value) => String(value || '-')
         }
     ], []);
+
+    const loadEvaluationValues = async () => {
+        if (!token || !detail) return;
+        if (evaluationValues.length > 0) return;
+        const params = new URLSearchParams({ subjectId: detail.subject._id });
+        const response = await fetch(`${API_BASE}/professor/evaluation-register-data?${params.toString()}`, {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+        if (response.status === 401) {
+            logout();
+            return;
+        }
+        if (!response.ok) {
+            throw new Error('No se pudieron cargar los valores de evaluación');
+        }
+        const result = await response.json() as {
+            options?: {
+                evaluationValues?: SelectOption[];
+            };
+        };
+        setEvaluationValues(Array.isArray(result.options?.evaluationValues) ? result.options?.evaluationValues : []);
+    };
+
+    const handleOpenEvaluationEdit = async (row: EvaluationRecord) => {
+        try {
+            setInfoMessage(null);
+            await loadEvaluationValues();
+            setSelectedEvaluation(row);
+            setSelectedEvaluationValueId(row.evaluationValueId?._id || '');
+            setEvaluationDialogOpen(true);
+        } catch (error) {
+            setInfoMessage(error instanceof Error ? error.message : 'No se pudo abrir la edición de evaluación');
+        }
+    };
+
+    const handleSaveEvaluationEdit = async () => {
+        if (!token || !detail || !selectedEvaluation) return;
+        if (!selectedEvaluationValueId) {
+            setInfoMessage('Debes seleccionar una evaluación');
+            return;
+        }
+        if (!selectedEvaluation.matriculatedSubjectId) {
+            setInfoMessage('No se encontró la matrícula asociada a esta evaluación');
+            return;
+        }
+        setSavingEdit(true);
+        setInfoMessage(null);
+        try {
+            const response = await fetch(`${API_BASE}/professor/evaluation-register`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    subjectId: detail.subject._id,
+                    category: selectedEvaluation.category,
+                    evaluationDate: selectedEvaluation.evaluationDate,
+                    examinationTypeId: selectedEvaluation.category === 'FINAL_EVALUATION'
+                        ? selectedEvaluation.examinationTypeId?._id
+                        : undefined,
+                    description: selectedEvaluation.description || '',
+                    entries: [
+                        {
+                            evaluationId: selectedEvaluation._id,
+                            matriculatedSubjectId: selectedEvaluation.matriculatedSubjectId,
+                            evaluationValueId: selectedEvaluationValueId
+                        }
+                    ]
+                })
+            });
+            if (response.status === 401) {
+                logout();
+                return;
+            }
+            const result = await response.json().catch(() => ({}));
+            if (!response.ok) {
+                throw new Error(result?.message || result?.error || 'No se pudo actualizar la evaluación');
+            }
+            setEvaluationDialogOpen(false);
+            setSelectedEvaluation(null);
+            setSelectedEvaluationValueId('');
+            setRefreshKey((prev) => prev + 1);
+            setInfoMessage('Evaluación actualizada correctamente.');
+        } catch (error) {
+            setInfoMessage(error instanceof Error ? error.message : 'No se pudo actualizar la evaluación');
+        } finally {
+            setSavingEdit(false);
+        }
+    };
+
+    const handleOpenAttendanceEdit = (row: AttendanceRecord) => {
+        setInfoMessage(null);
+        setSelectedAttendance(row);
+        setAttendanceIsPresent(Boolean(row.isPresent));
+        setAttendanceJustified(Boolean(row.justified));
+        setAttendanceReason(String(row.justificationReason || ''));
+        setAttendanceDialogOpen(true);
+    };
+
+    const handleSaveAttendanceEdit = async () => {
+        if (!token || !detail || !selectedAttendance) return;
+        if (!selectedAttendance.studentId) {
+            setInfoMessage('No se encontró el estudiante asociado a esta asistencia');
+            return;
+        }
+        setSavingEdit(true);
+        setInfoMessage(null);
+        try {
+            const response = await fetch(`${API_BASE}/professor/attendance-register`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    subjectId: detail.subject._id,
+                    attendanceDate: selectedAttendance.attendanceDate,
+                    entries: [
+                        {
+                            attendanceId: selectedAttendance._id,
+                            studentId: selectedAttendance.studentId,
+                            isPresent: attendanceIsPresent,
+                            justified: !attendanceIsPresent && attendanceJustified,
+                            justificationReason: !attendanceIsPresent && attendanceJustified
+                                ? attendanceReason.trim()
+                                : ''
+                        }
+                    ]
+                })
+            });
+            if (response.status === 401) {
+                logout();
+                return;
+            }
+            const result = await response.json().catch(() => ({}));
+            if (!response.ok) {
+                throw new Error(result?.message || result?.error || 'No se pudo actualizar la asistencia');
+            }
+            setAttendanceDialogOpen(false);
+            setSelectedAttendance(null);
+            setAttendanceReason('');
+            setRefreshKey((prev) => prev + 1);
+            setInfoMessage('Asistencia actualizada correctamente.');
+        } catch (error) {
+            setInfoMessage(error instanceof Error ? error.message : 'No se pudo actualizar la asistencia');
+        } finally {
+            setSavingEdit(false);
+        }
+    };
 
     const evaluationActions = useMemo<ReusableTableAction<EvaluationRecord>[]>(() => [
         {
             variant: 'edit',
             label: 'Editar',
-            onClick: () => setInfoMessage('La edición de evaluaciones se implementará más adelante.')
+            onClick: (row) => {
+                void handleOpenEvaluationEdit(row);
+            }
         }
-    ], []);
+    ], [evaluationValues.length, token, detail, logout]);
 
     const attendanceActions = useMemo<ReusableTableAction<AttendanceRecord>[]>(() => [
         {
             variant: 'edit',
             label: 'Editar',
-            onClick: () => setInfoMessage('La edición de asistencias se implementará más adelante.')
+            onClick: (row) => handleOpenAttendanceEdit(row)
         }
     ], []);
 
@@ -206,12 +398,14 @@ const StudentDetail: React.FC = () => {
                     showBackButton={true}
                     backTo="/professor/subject-detail"
                     action={(
-                        <Button
-                            variant="outlined"
-                            onClick={() => setRefreshKey((prev) => prev + 1)}
-                        >
-                            Actualizar
-                        </Button>
+                        <Tooltip title="Actualizar datos">
+                            <IconButton
+                                color="primary"
+                                onClick={() => setRefreshKey((prev) => prev + 1)}
+                            >
+                                <RefreshIcon />
+                            </IconButton>
+                        </Tooltip>
                     )}
                 />
 
@@ -290,6 +484,105 @@ const StudentDetail: React.FC = () => {
                         }}
                     />
                 </Card>
+
+                <Dialog open={evaluationDialogOpen} onClose={() => setEvaluationDialogOpen(false)} fullWidth maxWidth="xs">
+                    <DialogTitle>Editar evaluación</DialogTitle>
+                    <DialogContent>
+                        <Stack sx={{ pt: 1 }}>
+                            <TextField
+                                select
+                                label="Evaluación"
+                                value={selectedEvaluationValueId}
+                                onChange={(event) => setSelectedEvaluationValueId(event.target.value)}
+                                fullWidth
+                                disabled={savingEdit}
+                            >
+                                {evaluationValues.length > 0 ? evaluationValues.map((option) => (
+                                    <MenuItem key={option._id} value={option._id}>
+                                        {getEvaluationValueLabel(option.value)}
+                                    </MenuItem>
+                                )) : (
+                                    <MenuItem disabled>No hay valores disponibles</MenuItem>
+                                )}
+                            </TextField>
+                        </Stack>
+                    </DialogContent>
+                    <DialogActions>
+                        <Button onClick={() => setEvaluationDialogOpen(false)} color="inherit" disabled={savingEdit}>
+                            Cancelar
+                        </Button>
+                        <Button onClick={handleSaveEvaluationEdit} variant="contained" disabled={savingEdit}>
+                            {savingEdit ? 'Guardando...' : 'Guardar'}
+                        </Button>
+                    </DialogActions>
+                </Dialog>
+
+                <Dialog open={attendanceDialogOpen} onClose={() => setAttendanceDialogOpen(false)} fullWidth maxWidth="xs">
+                    <DialogTitle>Editar asistencia</DialogTitle>
+                    <DialogContent>
+                        <Stack spacing={2} sx={{ pt: 1 }}>
+                            <TextField
+                                select
+                                label="Asistió"
+                                value={attendanceIsPresent ? 'YES' : 'NO'}
+                                onChange={(event) => {
+                                    const present = event.target.value === 'YES';
+                                    setAttendanceIsPresent(present);
+                                    if (present) {
+                                        setAttendanceJustified(false);
+                                        setAttendanceReason('');
+                                    }
+                                }}
+                                fullWidth
+                                disabled={savingEdit}
+                            >
+                                <MenuItem value="YES">Sí</MenuItem>
+                                <MenuItem value="NO">No</MenuItem>
+                            </TextField>
+
+                            {!attendanceIsPresent && (
+                                <TextField
+                                    select
+                                    label="Justificado"
+                                    value={attendanceJustified ? 'YES' : 'NO'}
+                                    onChange={(event) => {
+                                        const justified = event.target.value === 'YES';
+                                        setAttendanceJustified(justified);
+                                        if (!justified) {
+                                            setAttendanceReason('');
+                                        }
+                                    }}
+                                    fullWidth
+                                    disabled={savingEdit}
+                                >
+                                    <MenuItem value="YES">Sí</MenuItem>
+                                    <MenuItem value="NO">No</MenuItem>
+                                </TextField>
+                            )}
+
+                            {!attendanceIsPresent && attendanceJustified && (
+                                <TextField
+                                    label="Razón de falta"
+                                    value={attendanceReason}
+                                    onChange={(event) => setAttendanceReason(event.target.value)}
+                                    fullWidth
+                                    multiline
+                                    minRows={2}
+                                    inputProps={{ maxLength: 500 }}
+                                    disabled={savingEdit}
+                                />
+                            )}
+                        </Stack>
+                    </DialogContent>
+                    <DialogActions>
+                        <Button onClick={() => setAttendanceDialogOpen(false)} color="inherit" disabled={savingEdit}>
+                            Cancelar
+                        </Button>
+                        <Button onClick={handleSaveAttendanceEdit} variant="contained" disabled={savingEdit}>
+                            {savingEdit ? 'Guardando...' : 'Guardar'}
+                        </Button>
+                    </DialogActions>
+                </Dialog>
             </Container>
         </MainLayout>
     );
