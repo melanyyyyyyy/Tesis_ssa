@@ -23,6 +23,7 @@ import MainLayout from '../../layouts/MainLayout';
 import PageHeader from '../../components/common/PageHeader';
 import { useAuth } from '../../context/AuthContext';
 import ReusableTable, { type ReusableTableAction, type ReusableTableColumn } from '../../components/common/ReusableTable';
+import ExportToPDF from '../../components/common/ExportToPDF';
 
 interface SubjectReference {
     _id: string;
@@ -203,6 +204,11 @@ const StudentDetail: React.FC = () => {
             renderCell: (value) => String(value || '-')
         }
     ], []);
+
+    const studentTableQueryParams = useMemo(() => ({
+        subjectId: detail?.subject._id || '',
+        studentId: detail?.studentSummary.studentId || ''
+    }), [detail]);
 
     const loadEvaluationValues = async () => {
         if (!token || !detail) return;
@@ -398,14 +404,60 @@ const StudentDetail: React.FC = () => {
                     showBackButton={true}
                     backTo="/professor/subject-detail"
                     action={(
-                        <Tooltip title="Actualizar datos">
-                            <IconButton
-                                color="primary"
-                                onClick={() => setRefreshKey((prev) => prev + 1)}
-                            >
-                                <RefreshIcon />
-                            </IconButton>
-                        </Tooltip>
+                        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                            <Tooltip title="Actualizar datos">
+                                <IconButton
+                                    color="primary"
+                                    onClick={() => setRefreshKey((prev) => prev + 1)}
+                                >
+                                    <RefreshIcon />
+                                </IconButton>
+                            </Tooltip>
+                            <ExportToPDF
+                                token={token}
+                                fileName={`detalle-estudiante-${detail.studentSummary.studentName}`}
+                                buttonLabel="Exportar a PDF"
+                                logoUrl="/images/uho-blue.png"
+                                onUnauthorized={logout}
+                                onError={(message) => setInfoMessage(message)}
+                                tables={[
+                                    {
+                                        title: `Registros de Evaluaciones - ${detail.studentSummary.studentName} - ${detail.subject.name}`,
+                                        endpoint: '/professor/student-evaluation-records',
+                                        queryParams: {
+                                            ...studentTableQueryParams,
+                                            page: 0,
+                                            limit: 1000
+                                        },
+                                        columns: evaluationColumns,
+                                        extractRows: (response) => {
+                                            if (!response || typeof response !== 'object') return [];
+                                            const parsed = response as Record<string, unknown>;
+                                            if (Array.isArray(parsed.data)) return parsed.data as EvaluationRecord[];
+                                            if (Array.isArray(parsed.items)) return parsed.items as EvaluationRecord[];
+                                            return [];
+                                        }
+                                    },
+                                    {
+                                        title: `Registros de Asistencias - ${detail.studentSummary.studentName} - ${detail.subject.name}`,
+                                        endpoint: '/professor/student-attendance-records',
+                                        queryParams: {
+                                            ...studentTableQueryParams,
+                                            page: 0,
+                                            limit: 1000
+                                        },
+                                        columns: attendanceColumns,
+                                        extractRows: (response) => {
+                                            if (!response || typeof response !== 'object') return [];
+                                            const parsed = response as Record<string, unknown>;
+                                            if (Array.isArray(parsed.data)) return parsed.data as AttendanceRecord[];
+                                            if (Array.isArray(parsed.items)) return parsed.items as AttendanceRecord[];
+                                            return [];
+                                        }
+                                    }
+                                ]}
+                            />
+                        </Box>
                     )}
                 />
 
@@ -428,10 +480,7 @@ const StudentDetail: React.FC = () => {
                         rowKey="_id"
                         serverPagination={true}
                         refreshKey={refreshKey}
-                        queryParams={{
-                            subjectId: detail.subject._id,
-                            studentId: detail.studentSummary.studentId
-                        }}
+                        queryParams={studentTableQueryParams}
                         tableAriaLabel="registros de evaluaciones del estudiante"
                         emptyMessage="No hay registros de evaluación para este estudiante."
                         onUnauthorized={logout}
@@ -463,10 +512,7 @@ const StudentDetail: React.FC = () => {
                         rowKey="_id"
                         serverPagination={true}
                         refreshKey={refreshKey}
-                        queryParams={{
-                            subjectId: detail.subject._id,
-                            studentId: detail.studentSummary.studentId
-                        }}
+                        queryParams={studentTableQueryParams}
                         tableAriaLabel="registros de asistencias del estudiante"
                         emptyMessage="No hay registros de asistencia para este estudiante."
                         onUnauthorized={logout}
