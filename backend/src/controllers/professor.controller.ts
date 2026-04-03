@@ -52,18 +52,63 @@ export async function getProfessorSubjects(req: Request, res: Response) {
 
 const toNumericScore = (value: unknown) => {
     if (typeof value === 'number') return value;
-    if (typeof value !== 'string') return 0;
+    if (typeof value !== 'string') return 2;
+    const normalized = value.trim().toUpperCase();
+    if (normalized === 'NP') return 2;
+    if (normalized === 'CO') return 5;
 
     const match = value.match(/-?\d+(?:[.,]\d+)?/);
-    if (!match) return 0;
+    if (!match) return 2;
     const parsed = Number.parseFloat(match[0].replace(',', '.'));
-    return Number.isFinite(parsed) ? parsed : 0;
+    return Number.isFinite(parsed) ? Math.max(2, Math.min(5, parsed)) : 2;
 };
 
 const average = (values: number[]) => {
-    if (!values.length) return 0;
+    if (!values.length) return 2;
     const total = values.reduce((sum, current) => sum + current, 0);
     return total / values.length;
+};
+
+type EvaluationRowForAverage = {
+    matriculatedSubjectId: unknown;
+    category: EvaluationCategory;
+    evaluationValueId?: { value?: string } | null;
+};
+
+const getSubjectStudentKey = (subjectId: string, studentId: string) => `${subjectId}:${studentId}`;
+
+const calculateSubjectEvaluationAverageForStudent = (
+    subjectId: string,
+    studentId: string,
+    matriculatedIdsBySubjectStudent: Map<string, string[]>,
+    evaluationRowsByMatriculated: Map<string, EvaluationRowForAverage[]>
+) => {
+    const key = getSubjectStudentKey(subjectId, studentId);
+    const matriculatedIds = matriculatedIdsBySubjectStudent.get(key) || [];
+    if (matriculatedIds.length === 0) return 2;
+
+    const systematic: number[] = [];
+    const partial: number[] = [];
+    const final: number[] = [];
+
+    matriculatedIds.forEach((matriculatedId) => {
+        const rows = evaluationRowsByMatriculated.get(matriculatedId) || [];
+        rows.forEach((evaluation) => {
+            const numericValue = toNumericScore(evaluation.evaluationValueId?.value);
+            if (evaluation.category === EvaluationCategory.SYSTEMATIC_EVALUATION) {
+                systematic.push(numericValue);
+            } else if (evaluation.category === EvaluationCategory.PARTIAL_EVALUATION) {
+                partial.push(numericValue);
+            } else if (evaluation.category === EvaluationCategory.FINAL_EVALUATION) {
+                final.push(numericValue);
+            }
+        });
+    });
+
+    const systematicAverage = average(systematic);
+    const partialAverage = average(partial);
+    const finalScore = final.length > 0 ? Math.max(...final) : 2;
+    return Math.max(2, Math.min(5, Number(((systematicAverage * 0.2) + (partialAverage * 0.3) + (finalScore * 0.5)).toFixed(2))));
 };
 
 const getDayRange = (dateValue?: string) => {
@@ -169,32 +214,26 @@ export async function getSubjectStudentsSummary(req: Request, res: Response) {
             });
         });
 
-        const evaluationMap = new Map<string, {
-            systematic: number[];
-            partial: number[];
-            final: number[];
-        }>();
+        const matriculatedIdsBySubjectStudent = new Map<string, string[]>();
+        matriculatedSubjects.forEach((item) => {
+            const studentRecord = item.studentId as unknown as Record<string, unknown> | null;
+            const studentIdValue = studentRecord && typeof studentRecord === 'object' && '_id' in studentRecord
+                ? studentRecord._id
+                : item.studentId;
+            const studentKey = studentIdValue ? String(studentIdValue) : '';
+            if (!studentKey) return;
+            const key = getSubjectStudentKey(subjectId, studentKey);
+            const current = matriculatedIdsBySubjectStudent.get(key) || [];
+            current.push(String(item._id));
+            matriculatedIdsBySubjectStudent.set(key, current);
+        });
 
+        const evaluationRowsByMatriculated = new Map<string, EvaluationRowForAverage[]>();
         evaluationRows.forEach((evaluation) => {
             const key = String(evaluation.matriculatedSubjectId);
-            const current = evaluationMap.get(key) || {
-                systematic: [],
-                partial: [],
-                final: []
-            };
-
-            const evaluationValue = evaluation.evaluationValueId as { value?: string } | null;
-            const numericValue = toNumericScore(evaluationValue?.value);
-
-            if (evaluation.category === EvaluationCategory.SYSTEMATIC_EVALUATION) {
-                current.systematic.push(numericValue);
-            } else if (evaluation.category === EvaluationCategory.PARTIAL_EVALUATION) {
-                current.partial.push(numericValue);
-            } else if (evaluation.category === EvaluationCategory.FINAL_EVALUATION) {
-                current.final.push(numericValue);
-            }
-
-            evaluationMap.set(key, current);
+            const current = evaluationRowsByMatriculated.get(key) || [];
+            current.push(evaluation as unknown as EvaluationRowForAverage);
+            evaluationRowsByMatriculated.set(key, current);
         });
 
         const data = matriculatedSubjects.map((item) => {
@@ -208,23 +247,21 @@ export async function getSubjectStudentsSummary(req: Request, res: Response) {
                 ? (attendance.present / attendance.total) * 100
                 : 0;
 
-            const evaluations = evaluationMap.get(String(item._id)) || {
-                systematic: [],
-                partial: [],
-                final: []
-            };
-
-            const systematicAverage = average(evaluations.systematic);
-            const partialAverage = average(evaluations.partial);
-            const finalScore = evaluations.final.length > 0 ? Math.max(...evaluations.final) : 0;
-            const evaluationAverage = (systematicAverage * 0.2) + (partialAverage * 0.3) + (finalScore * 0.5);
+            const evaluationAverage = studentKey
+                ? calculateSubjectEvaluationAverageForStudent(
+                    subjectId,
+                    studentKey,
+                    matriculatedIdsBySubjectStudent,
+                    evaluationRowsByMatriculated
+                )
+                : 0;
 
             return {
                 _id: String(item._id),
                 studentId: studentIdValue ? String(studentIdValue) : null,
                 studentName: `${(studentRecord?.firstName as string) || ''} ${(studentRecord?.lastName as string) || ''}`.trim() || 'Sin nombre',
                 attendanceAverage: Number(attendanceAverage.toFixed(2)),
-                evaluationAverage: Number(evaluationAverage.toFixed(2)),
+                evaluationAverage,
                 academicYear: item.academicYear
             };
         });
