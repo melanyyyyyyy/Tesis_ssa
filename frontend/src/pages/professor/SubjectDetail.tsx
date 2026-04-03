@@ -160,6 +160,10 @@ const SubjectDetail: React.FC = () => {
                         color="secondary"
                         disableElevation
                         startIcon={<AttendanceIcon />}
+                        disabled={!selectedSubject}
+                        onClick={() => selectedSubject && navigate('/professor/register-attendance', {
+                            state: { subject: selectedSubject }
+                        })}
                     >
                         Añadir registro de asistencia
                     </Button>
@@ -169,6 +173,10 @@ const SubjectDetail: React.FC = () => {
                         color="secondary"
                         disableElevation
                         startIcon={<EvaluationIcon />}
+                        disabled={!selectedSubject}
+                        onClick={() => selectedSubject && navigate('/professor/register-evaluation', {
+                            state: { subject: selectedSubject }
+                        })}
                     >
                         Añadir registro de evaluación
                     </Button>
