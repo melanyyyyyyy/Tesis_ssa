@@ -117,6 +117,10 @@ const LastExportPage: React.FC = () => {
         if (!selectedEvaluation || !token) return;
         try {
             setError(null);
+            const payload: Partial<Evaluation> = {
+                ...data,
+                category: 'FINAL_EVALUATION'
+            };
             const url = `${API_BASE}/secretary/evaluation/${selectedEvaluation._id}`;
             const method = 'PUT';
 
@@ -126,7 +130,7 @@ const LastExportPage: React.FC = () => {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${token}`
                 },
-                body: JSON.stringify(data)
+                body: JSON.stringify(payload)
             });
 
             if (response.status === 401) {
@@ -222,6 +226,7 @@ const LastExportPage: React.FC = () => {
                 <ReusableTable<Evaluation>
                     endpoint="/secretary/last-export-grades"
                     token={token}
+                    queryParams={{ category: 'FINAL_EVALUATION' }}
                     columns={columns}
                     actions={actions}
                     rowKey="_id"
@@ -260,6 +265,7 @@ const LastExportPage: React.FC = () => {
                     onClose={() => setFormOpen(false)}
                     onSubmit={handleSave}
                     initialData={selectedEvaluation}
+                    hideCategory={true}
                 />
                 <ModalDialog
                     open={deleteModalOpen}

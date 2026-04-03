@@ -84,6 +84,7 @@ EvaluationScoreSchema.index({ matriculatedSubjectId: 1, evaluationDate: -1 });
 async function updateSyncNotification(EvaluationModel: any) {
   try {
     const pendingCount = await EvaluationModel.countDocuments({
+      category: 'FINAL_EVALUATION',
       $or: [
         { registrationDate: null },
         {

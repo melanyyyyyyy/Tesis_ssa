@@ -112,6 +112,7 @@ const SubjectDetail: React.FC = () => {
                         ? `${selectedSubject.name} | Año académico: ${selectedSubject.academicYear} | Carrera: ${subjectCareerName}`
                         : 'No hay asignatura seleccionada.'}
                     showBackButton={true}
+                    backTo="/professor/dashboard"
                     action={
                         <Tooltip title="Actualizar datos">
                             <IconButton onClick={handleRefresh} color="primary">
@@ -124,12 +125,6 @@ const SubjectDetail: React.FC = () => {
                 {!selectedSubject && (
                     <Alert severity="warning" sx={{ mb: 3, borderRadius: 2 }}>
                         Debes seleccionar una asignatura desde el panel del profesor para ver su detalle.
-                    </Alert>
-                )}
-
-                {selectedStudent && (
-                    <Alert severity="info" onClose={() => setSelectedStudent(null)} sx={{ mb: 3, borderRadius: 2 }}>
-                        {`${selectedStudent.studentName} | Asistencia: ${selectedStudent.attendanceAverage.toFixed(2)}% | Promedio: ${selectedStudent.evaluationAverage.toFixed(2)}`}
                     </Alert>
                 )}
 

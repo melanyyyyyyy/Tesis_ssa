@@ -24,6 +24,7 @@ interface EvaluationFormDialogProps {
     onClose: () => void;
     onSubmit: (data: Partial<Evaluation>) => Promise<void>;
     initialData?: Evaluation | null;
+    hideCategory?: boolean;
 }
 
 interface Option {
@@ -46,7 +47,8 @@ export const EvaluationFormDialog: React.FC<EvaluationFormDialogProps> = ({
     open,
     onClose,
     onSubmit,
-    initialData
+    initialData,
+    hideCategory = false
 }) => {
     const { token } = useAuth();
     const [loading, setLoading] = useState(false);
@@ -504,21 +506,23 @@ export const EvaluationFormDialog: React.FC<EvaluationFormDialogProps> = ({
                             />
                         </Grid>
 
-                        <Grid size={6}>
-                            <TextField
-                                select
-                                label="Categoría"
-                                name="category"
-                                value={formData.category}
-                                onChange={handleChange}
-                                fullWidth
-                                required
-                            >
-                                <MenuItem value="SYSTEMATIC_EVALUATION">Sistemática</MenuItem>
-                                <MenuItem value="PARTIAL_EVALUATION">Parcial</MenuItem>
-                                <MenuItem value="FINAL_EVALUATION">Final</MenuItem>
-                            </TextField>
-                        </Grid>
+                        {!hideCategory && (
+                            <Grid size={6}>
+                                <TextField
+                                    select
+                                    label="Categoría"
+                                    name="category"
+                                    value={formData.category}
+                                    onChange={handleChange}
+                                    fullWidth
+                                    required
+                                >
+                                    <MenuItem value="SYSTEMATIC_EVALUATION">Sistemática</MenuItem>
+                                    <MenuItem value="PARTIAL_EVALUATION">Parcial</MenuItem>
+                                    <MenuItem value="FINAL_EVALUATION">Final</MenuItem>
+                                </TextField>
+                            </Grid>
+                        )}
 
                         <Grid size={6}>
                             <TextField

@@ -8,13 +8,15 @@ interface PageHeaderProps {
     subtitle?: string | React.ReactNode;
     showBackButton?: boolean;
     action?: React.ReactNode;
+    backTo?: string;
 }
 
 const PageHeader: React.FC<PageHeaderProps> = ({ 
     title, 
     subtitle, 
     showBackButton = false,
-    action
+    action,
+    backTo
 }) => {
     const navigate = useNavigate();
     const theme = useTheme();
@@ -25,7 +27,13 @@ const PageHeader: React.FC<PageHeaderProps> = ({
                 <Box sx={{ display: 'flex', alignItems: 'center' }}>
                     {showBackButton && (
                         <IconButton 
-                            onClick={() => navigate(-1)} 
+                            onClick={() => {
+                                if (backTo) {
+                                    navigate(backTo);
+                                    return;
+                                }
+                                navigate(-1);
+                            }}
                             sx={{ 
                                 mr: 2, 
                                 ml: -1, 

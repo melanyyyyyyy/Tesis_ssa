@@ -39,6 +39,7 @@ export const SyncService = {
         }
 
         const pendingScores = await EvaluationScoreModel.find({
+            category: 'FINAL_EVALUATION',
             $or: [
                     { registrationDate: null },
                     {
@@ -182,6 +183,7 @@ export const SyncService = {
         console.log(`Sync completed. Processed: ${processedCount}, Errors: ${errorCount}, Deleted: ${deletedCount}`);
 
         const afterSync = await EvaluationScoreModel.find({
+            category: 'FINAL_EVALUATION',
             $or: [
                 { registrationDate: null },
                 { $expr: { $gt: ["$updatedAt", "$registrationDate"] } }
@@ -196,6 +198,7 @@ export const SyncService = {
     async getPendingGradesCount() {
         try {
             const count = await EvaluationScoreModel.countDocuments({
+                category: 'FINAL_EVALUATION',
                 $or: [
                     { registrationDate: null },
 
@@ -220,7 +223,10 @@ export const SyncService = {
     },
 
     async getLastExportStats() {
-        const lastExport = await EvaluationScoreModel.findOne({ registrationDate: { $ne: null } }).sort({ registrationDate: -1 });
+        const lastExport = await EvaluationScoreModel.findOne({
+            category: 'FINAL_EVALUATION',
+            registrationDate: { $ne: null }
+        }).sort({ registrationDate: -1 });
 
         if (!lastExport || !lastExport.registrationDate) {
             return { count: 0, date: null };
@@ -231,6 +237,7 @@ export const SyncService = {
         const endWindow = new Date(lastDate.getTime() + 60000);
 
         const count = await EvaluationScoreModel.countDocuments({
+            category: 'FINAL_EVALUATION',
             registrationDate: {
                 $gte: startWindow,
                 $lte: endWindow
@@ -243,6 +250,7 @@ export const SyncService = {
     async getPendingGrades(skip: number = 0, limit: number = 50) {
         try {
             const evaluations = await EvaluationScoreModel.find({
+                category: 'FINAL_EVALUATION',
                 $or: [
                     { registrationDate: null },
                     {
@@ -284,7 +292,10 @@ export const SyncService = {
 
     async getLastExportGradesCount() {
         try {
-            const lastExport = await EvaluationScoreModel.findOne({ registrationDate: { $ne: null } }).sort({ registrationDate: -1 });
+            const lastExport = await EvaluationScoreModel.findOne({
+                category: 'FINAL_EVALUATION',
+                registrationDate: { $ne: null }
+            }).sort({ registrationDate: -1 });
 
             if (!lastExport || !lastExport.registrationDate) {
                 return { count: 0 };
@@ -295,6 +306,7 @@ export const SyncService = {
             const endWindow = new Date(lastDate.getTime() + 60000);
 
             const count = await EvaluationScoreModel.countDocuments({
+                category: 'FINAL_EVALUATION',
                 registrationDate: {
                     $gte: startWindow,
                     $lte: endWindow
@@ -309,7 +321,10 @@ export const SyncService = {
     },
 
     async getLastExportGrades(skip: number = 0, limit: number = 50) {
-        const lastExport = await EvaluationScoreModel.findOne({ registrationDate: { $ne: null } }).sort({ registrationDate: -1 });
+        const lastExport = await EvaluationScoreModel.findOne({
+            category: 'FINAL_EVALUATION',
+            registrationDate: { $ne: null }
+        }).sort({ registrationDate: -1 });
 
         if (!lastExport || !lastExport.registrationDate) {
             return [];
@@ -320,6 +335,7 @@ export const SyncService = {
         const endWindow = new Date(lastDate.getTime() + 60000);
 
         return await EvaluationScoreModel.find({
+            category: 'FINAL_EVALUATION',
             registrationDate: {
                 $gte: startWindow,
                 $lte: endWindow
