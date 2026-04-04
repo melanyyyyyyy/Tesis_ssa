@@ -1,6 +1,8 @@
 export { default as AttendanceModel, type IAttendance } from './Attendance.js';
+export { default as ConversationModel, type IConversation } from './Conversation.js';
 export { default as EvaluationScoreModel, type IEvaluationScore, EvaluationCategory } from './EvaluationScore.js';
 export { default as ExamCalendarModel, type IExamCalendar } from './ExamCalendar.js';
+export { default as MessageModel, type IMessage } from './Message.js';
 export { default as NotificationModel, type INotification } from './Notification.js';
 export { default as PendingDeletionModel, type IPendingDeletion } from './PendingDeletion.js';
 export { default as RoleModel, type IRole } from './Role.js';

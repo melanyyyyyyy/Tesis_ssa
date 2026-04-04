@@ -5,6 +5,7 @@ import LogoutIcon from '@mui/icons-material/Logout';
 import InfoIcon from '@mui/icons-material/Info';
 import WarningIcon from '@mui/icons-material/Warning';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import ChatIcon from '@mui/icons-material/Chat';
 import CircleIcon from '@mui/icons-material/Circle';
 import Tooltip from '@mui/material/Tooltip';
 import { useAuth } from '../context/AuthContext';
@@ -129,6 +130,7 @@ export const Navbar = () => {
         switch (type) {
             case 'SYSTEM_ALERT': return <WarningIcon color="error" fontSize="small" />;
             case 'NEW_EVALUATION': return <CheckCircleIcon color="success" fontSize="small" />;
+            case 'NEW_MESSAGE': return <ChatIcon color="primary" fontSize="small" />;
             case 'INFO': default: return <InfoIcon color="info" fontSize="small" />;
         }
     };

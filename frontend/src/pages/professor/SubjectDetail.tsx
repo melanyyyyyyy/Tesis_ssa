@@ -229,6 +229,10 @@ const SubjectDetail: React.FC = () => {
                         variant="outlined" 
                         color="primary"
                         startIcon={<ChatIcon />}
+                        disabled={!selectedSubject}
+                        onClick={() => selectedSubject && navigate('/professor/chat', {
+                            state: { subject: selectedSubject }
+                        })}
                     >
                         Chat
                     </Button>

@@ -3,7 +3,6 @@ import { UserModel, ExamCalendarModel } from '../models/system/index.js';
 import { StudentModel, SubjectModel, ExaminationTypeModel } from '../models/sigenu/index.js';
 import NotificationModel from '../models/system/Notification.js';
 
-
 export const getUserProfile = async (req: Request, res: Response) => {
   try {
     const userId = req.user.id;

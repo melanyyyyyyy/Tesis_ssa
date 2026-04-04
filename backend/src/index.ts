@@ -1,13 +1,17 @@
 import express from "express";
+import { createServer } from "node:http";
 import dotenv from "dotenv";
 import cors from "cors";
+import { Server } from "socket.io";
 import { connectDatabase } from "./config/database.js";
-import { sigenuRouter, authRouter, secretaryRouter, notificationRouter, commonRouter, professorRouter } from "./routes/index.js";
+import { sigenuRouter, authRouter, secretaryRouter, notificationRouter, commonRouter, professorRouter, chatRouter } from "./routes/index.js";
 import { ENV } from "./config/envs.js";
+import { setChatSocketServer } from "./services/chat.service.js";
 
 dotenv.config();
 
 const app = express();
+const httpServer = createServer(app);
 
 app.use(express.json());
 
@@ -28,12 +32,23 @@ app.use('/api/secretary', secretaryRouter);
 app.use('/api/notifications', notificationRouter);
 app.use('/api/common', commonRouter);
 app.use('/api/professor', professorRouter);
+app.use('/api/chat', chatRouter);
 
 app.use((req, res) => {
   res.status(404).json({ error: "Route not found" });
 });
 
-const server = app.listen(PORT, () => {
+const io = new Server(httpServer, {
+  cors: {
+    origin: FRONTEND_URL,
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH']
+  }
+});
+
+setChatSocketServer(io);
+
+const server = httpServer.listen(PORT, () => {
   console.log(`Server listening on port ${PORT}`);
 });
 
