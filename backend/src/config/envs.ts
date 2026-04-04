@@ -24,4 +24,6 @@ export const ENV = {
     JWT_EXPIRES: getEnv('JWT_EXPIRES_IN', '1d'),
 
     EXTERNAL_AUTH_TOKEN: getEnv('EXTERNAL_AUTH_TOKEN'),
+    NODE_ENV: getEnv('NODE_ENV', 'development'),
+    TEST_USER_PASSWORD: getEnv('TEST_USER_PASSWORD', 'test'),
 };

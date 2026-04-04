@@ -2,7 +2,7 @@ import { Schema, model, Document, Types } from 'mongoose';
 
 export interface IUser extends Document {
   _id: Types.ObjectId;
-  email: string;
+  email?: string;
   identification: string;
   firstName: string;
   lastName: string;
@@ -14,7 +14,7 @@ export interface IUser extends Document {
 }
 
 const UserSchema = new Schema<IUser>({
-  email: { type: String, required: true, unique: true, lowercase: true, index: true },
+  email: { type: String, required: false, lowercase: true },
   identification: { type: String, required: true, unique: true },
   firstName: { type: String, required: true, trim: true },
   lastName: { type: String, required: true, trim: true },
@@ -23,6 +23,11 @@ const UserSchema = new Schema<IUser>({
   isActive: { type: Boolean, default: true, index: true, },
 }, { timestamps: true, versionKey: false, collection: 'users' });
 
-UserSchema.index({ email: 1, roleId: 1 }, { unique: true });
+UserSchema.index({ email: 1 }, { unique: true, sparse: true });
+
+UserSchema.index({ email: 1, roleId: 1 }, { 
+  unique: true, 
+  partialFilterExpression: { email: { $type: 'string' } } 
+});
 
 export default model<IUser>('User', UserSchema);

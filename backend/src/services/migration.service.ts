@@ -11,6 +11,7 @@ import {
     EvaluationValueModel,
     ExaminationTypeModel
 } from '../models/sigenu/index.js'
+import { RoleModel, UserModel } from '../models/system/index.js'
 
 export const MigrationService = {
     async migrateAll() {
@@ -229,11 +230,17 @@ export const MigrationService = {
     async migrateStudents() {
         console.log('Migrating Students...');
 
-        const [careers, courseTypes, statuses] = await Promise.all([
+        const [careers, courseTypes, statuses, studentRole] = await Promise.all([
             CareerModel.find({}, 'sigenId _id').lean(),
             CourseTypeModel.find({}, 'sigenId _id').lean(),
-            StudentStatusModel.find({}, 'sigenId _id').lean()
+            StudentStatusModel.find({}, 'sigenId _id').lean(),
+            RoleModel.findOne({ name: 'student' })
         ]);
+
+        if (!studentRole) {
+            console.error('Error: Student role not found in database.');
+            return;
+        }
 
         const careerMap = new Map(careers.map(c => [c.sigenId, c._id]));
         const courseTypeMap = new Map(courseTypes.map(ct => [ct.sigenId, ct._id]));
@@ -271,35 +278,31 @@ export const MigrationService = {
         ORDER BY s.id_student;
     `);
 
-        let bulkOps = [];
+        let studentBulkOps = [];
         let count = 0;
         let errors = 0;
-        const batchSize = 1000;
+        const batchSize = 500;
 
         for (const row of rows) {
             const careerId = careerMap.get(String(row.career_fk));
             const courseTypeId = courseTypeMap.get(String(row.course_type_fk));
             const statusId = statusMap.get(String(row.student_status_fk));
 
-            if (!careerId || !courseTypeId || !statusId) {
+            if (!careerId || !courseTypeId || !statusId || seenIdentifications.has(row.identification)) {
                 errors++;
                 continue;
             }
 
-            if (seenIdentifications.has(row.identification)) {
-                errors++;
-                continue;
-            }
             seenIdentifications.add(row.identification);
 
-            bulkOps.push({
+            studentBulkOps.push({
                 updateOne: {
                     filter: { sigenId: row.id_student.toString() },
                     update: {
                         firstName: row.first_name,
                         lastName: row.last_name,
                         identification: row.identification,
-                        email: row.email,
+                        ...(row.email && { email: row.email }),
                         careerId: careerId,
                         courseTypeId: courseTypeId,
                         studentStatusId: statusId,
@@ -310,29 +313,53 @@ export const MigrationService = {
                 }
             });
 
-            if (bulkOps.length === batchSize) {
-                try {
-                    await StudentModel.bulkWrite(bulkOps, { ordered: false });
-                    count += bulkOps.length;
-                } catch (err: any) {
-                    errors += err.writeErrors ? err.writeErrors.length : 1;
-                    count += (bulkOps.length - (err.writeErrors ? err.writeErrors.length : 1));
-                }
-                bulkOps = [];
+            if (studentBulkOps.length === batchSize) {
+                await this.executeBatch(studentBulkOps, studentRole._id);
+                count += studentBulkOps.length;
+                studentBulkOps = [];
             }
         }
 
-        if (bulkOps.length > 0) {
-            try {
-                await StudentModel.bulkWrite(bulkOps, { ordered: false });
-                count += bulkOps.length;
-            } catch (err: any) {
-                errors += err.writeErrors ? err.writeErrors.length : 1;
-                count += (bulkOps.length - (err.writeErrors ? err.writeErrors.length : 1));
-            }
+        if (studentBulkOps.length > 0) {
+            await this.executeBatch(studentBulkOps, studentRole._id);
+            count += studentBulkOps.length;
         }
 
         console.log(`Students processed: ${count}. Errors/Skipped: ${errors}.`);
+    },
+
+    async executeBatch(studentOps: any[], roleId: any) {
+        try {
+            await StudentModel.bulkWrite(studentOps, { ordered: false });
+
+            const sigenIds = studentOps.map(op => op.updateOne.filter.sigenId);
+            const savedStudents = await StudentModel.find(
+                { sigenId: { $in: sigenIds } },
+                '_id identification firstName lastName email'
+            ).lean();
+
+            const userBulkOps = savedStudents.map(student => ({
+                updateOne: {
+                    filter: { identification: student.identification },
+                    update: {
+                        firstName: student.firstName,
+                        lastName: student.lastName,
+                        identification: student.identification,
+                        ...(student.email && { email: student.email }),
+                        roleId: roleId,
+                        studentId: student._id,
+                        isActive: false
+                    },
+                    upsert: true
+                }
+            }));
+
+            if (userBulkOps.length > 0) {
+                await UserModel.bulkWrite(userBulkOps, { ordered: false });
+            }
+        } catch (err) {
+            console.error('Error in batch execution:', err);
+        }
     },
 
     async migrateSubjects() {

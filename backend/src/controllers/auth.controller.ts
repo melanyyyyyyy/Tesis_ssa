@@ -1,12 +1,11 @@
 import { Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
 import { UserModel, RoleModel } from '../models/system/index.js';
-import Student from '../models/sigenu/Student.js';
-import { ENV } from '../config/envs.js'; 
+import { StudentModel } from '../models/sigenu/index.js';
+import { ENV } from '../config/envs.js';
 
 export const generateToken = (user: any, roleName?: string): string => {
     const role = roleName || (user.roleId && user.roleId.name ? user.roleId.name : user.roleId);
-
     const payload = { 
         id: user._id, 
         email: user.email, 
@@ -14,14 +13,10 @@ export const generateToken = (user: any, roleName?: string): string => {
         identification: user.identification
     };
 
-    return jwt.sign(
-        payload,
-        ENV.JWT_SECRET,
-        { 
-            expiresIn: ENV.JWT_EXPIRES as any,
-            algorithm: 'HS256' 
-        }
-    );
+    return jwt.sign(payload, ENV.JWT_SECRET, { 
+        expiresIn: ENV.JWT_EXPIRES as any,
+        algorithm: 'HS256' 
+    });
 };
 
 export const AuthController = {
@@ -33,15 +28,17 @@ export const AuthController = {
             return;
         }
 
-        /////// Test User (Secretary)
-        if (username === 'test_secretary' || username === 'test_professor') {
+        if (ENV.NODE_ENV !== 'production' && (username === 'test_secretary' || username === 'test_professor')) {
             try {
-                const user = await UserModel.findOne({ email: username }).populate('roleId');
+                if (password !== ENV.TEST_USER_PASSWORD) {
+                    res.status(401).json({ error: 'Invalid password for test user' });
+                    return;
+                }
                 
+                const user = await UserModel.findOne({ email: username }).populate('roleId');
                 if (user && user.roleId) {
                     const roleName = (user.roleId as any).name;
                     const token = generateToken(user, roleName);
-                    
                     res.json({
                         message: 'Login successful (Test User)',
                         token,
@@ -60,8 +57,6 @@ export const AuthController = {
             }
         }
 
-        ////////////
-
         try {
             const apiResponse = await fetch('https://auth.uho.edu.cu/login', {
                 method: 'POST',
@@ -75,19 +70,19 @@ export const AuthController = {
             });
 
             const data: any = await apiResponse.json();
-            console.log('Auth API Response:', data); 
 
             if (!data.OK || !data.activeUser) {
                  res.status(401).json({ error: 'Authentication failed with external provider' });
                  return;
             }
 
-            const { personal_information, account_info, uid } = data.activeUser;
+            const { personal_information, uid } = data.activeUser;
             const dni = personal_information.dni;
             const firstName = personal_information.given_name;
             const lastName = personal_information.sn;
 
-            let student = await Student.findOne({ identification: dni });
+            let student = await StudentModel.findOne({ identification: dni });
+            let roleIdToAssign = undefined;
 
             if (student) {
                 student.email = uid;
@@ -98,84 +93,55 @@ export const AuthController = {
                      res.status(500).json({ error: 'System error: Student role not defined' });
                      return;
                 }
-
-                let user = await UserModel.findOne({ identification: dni });
-                if (!user) {
-                    user = new UserModel({
-                        email: uid, 
-                        identification: dni,
-                        firstName: firstName,
-                        lastName: lastName,
-                        roleId: studentRole._id,
-                        studentId: student._id,
-                        isActive: true
-                    });
-                } else {
-                    user.roleId = studentRole._id;
-                    user.studentId = student._id;
-                    user.email = uid;
-                    user.firstName = firstName;
-                    user.lastName = lastName;
-                }
-                await user.save();
-
-                const token = generateToken(user, 'student');
-                res.json({
-                    message: 'Login successful',
-                    token,
-                    user: {
-                        _id: user._id,
-                        firstName: user.firstName,
-                        lastName: user.lastName,
-                        email: user.email,
-                        role: 'student'
-                    }
-                });
-                return;
+                roleIdToAssign = studentRole._id;
             }
-            
+
             let user = await UserModel.findOne({ identification: dni });
 
             if (!user) {
                 user = new UserModel({
-                    email: uid,
+                    email: uid, 
                     identification: dni,
-                    firstName: firstName,
-                    lastName: lastName,
-                    roleId: undefined, 
+                    firstName,
+                    lastName,
+                    roleId: roleIdToAssign, 
+                    studentId: student ? student._id : undefined,
                     isActive: true
                 });
-                await user.save();
-                
+            } else {
+                user.email = uid;
+                user.firstName = firstName;
+                user.lastName = lastName;
+                user.isActive = true;
+                if (student) user.studentId = student._id;
+                if (roleIdToAssign) user.roleId = roleIdToAssign; 
+            }
+            
+            await user.save();
+
+            if (!user.roleId) {
                 res.status(403).json({ 
-                    message: 'User created but no role assigned.',
+                    message: 'User created but no role assigned. Please contact administration.',
                     userCreated: true
                 });
                 return;
             }
 
-            if (user.roleId) {
-                await user.populate('roleId');
-                const roleName = (user.roleId as any).name;
+            await user.populate('roleId');
+            const roleName = (user.roleId as any).name;
 
-                const token = generateToken(user, roleName);
-                res.json({
-                    message: 'Login successful',
-                    token,
-                    user: {
-                        _id: user._id,
-                        firstName: user.firstName,
-                        lastName: user.lastName,
-                        email: user.email,
-                        role: roleName
-                    }
-                });
-            } else {
-                res.status(403).json({ 
-                    message: 'User exists but has no role assigned.',
-                    userCreated: true
-                });
-            }
+            const token = generateToken(user, roleName);
+            res.json({
+                message: 'Login successful',
+                token,
+                user: {
+                    _id: user._id,
+                    firstName: user.firstName,
+                    lastName: user.lastName,
+                    email: user.email,
+                    role: roleName
+                }
+            });
 
         } catch (error: any) {
             console.error('Login error:', error);
