@@ -149,7 +149,6 @@ export const EvaluationFormDialog: React.FC<EvaluationFormDialogProps> = ({
             }
             if (valuesRes.ok) {
                 const values = await valuesRes.json();
-                // Ensure values is an array before sorting
                 const valuesArray = Array.isArray(values) ? values : (values.data || values.items || []);
                 const sortedValues = valuesArray.sort((a: Option, b: Option) => {
                     const aValue = a.value || '';

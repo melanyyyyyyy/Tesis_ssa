@@ -118,7 +118,6 @@ const RegisterEvaluation: React.FC<RegisterEvaluationProps> = ({
             } catch (e) {
                 console.error('Error parsing initial date:', e);
             }
-            // If we can't parse it but it's a string, maybe it's already YYYY-MM-DD
             if (typeof initialEvaluationDate === 'string' && /^\d{4}-\d{2}-\d{2}/.test(initialEvaluationDate)) {
                 return initialEvaluationDate.split('T')[0];
             }

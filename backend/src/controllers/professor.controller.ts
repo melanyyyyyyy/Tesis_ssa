@@ -53,7 +53,6 @@ export async function getSubjectEvaluationHistory(req: Request, res: Response) {
             .sort({ createdAt: -1 })
             .lean();
 
-        // Group by createdAt
         const groupedMap = new Map<string, any>();
         evaluations.forEach((evaluation: any) => {
             const createdAtStr = evaluation.createdAt.toISOString();
@@ -182,7 +181,6 @@ export async function getSubjectAttendanceHistory(req: Request, res: Response) {
             .sort({ createdAt: -1 })
             .lean();
 
-        // Group by createdAt
         const groupedMap = new Map<string, any>();
         attendances.forEach((attendance: any) => {
             const createdAtStr = attendance.createdAt.toISOString();
@@ -874,7 +872,6 @@ export async function getAcademicRanking(req: Request, res: Response) {
             subjectIdsByStudent.set(studentKey, studentSubjects);
         });
 
-        //
         const studentNameById = new Map<string, string>();
         currentSubjectEnrollments.forEach((item) => {
             const studentRecord = item.studentId as unknown as Record<string, unknown> | null;
@@ -902,7 +899,6 @@ export async function getAcademicRanking(req: Request, res: Response) {
             subjectNameById.set(String(item._id), item.name || 'Sin asignatura');
         });
 
-        //
         const evaluationRowsByMatriculated = new Map<string, EvaluationRowForAverage[]>();
         evaluationScoreRows.forEach((evaluation) => {
             const key = String(evaluation.matriculatedSubjectId);

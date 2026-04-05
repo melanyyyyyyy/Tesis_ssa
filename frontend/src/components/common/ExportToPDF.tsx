@@ -180,7 +180,7 @@ const loadLogoWithFallback = async (preferredLogoUrl?: string) => {
         try {
             return await imageToDataUrl(candidate);
         } catch {
-            // Keep trying with fallback candidates.
+            // 
         }
     }
     return null;

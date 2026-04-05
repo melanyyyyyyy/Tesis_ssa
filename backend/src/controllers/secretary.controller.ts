@@ -253,7 +253,6 @@ export async function getMatriculatedSubjects(req: Request, res: Response) {
             MatriculatedSubjectModel.countDocuments(filter)
         ]);
 
-        // Get evaluation data for each subject
         const subjectsWithEvaluation = await Promise.all(
             matriculatedSubjects.map(async (subject) => {
                 const evaluation = await EvaluationModel.findOne({
@@ -516,7 +515,6 @@ export async function getEvaluations(req: Request, res: Response) {
 
         const evaluationsWithNames = await Promise.all(
             evaluations.map(async (evaluation) => {
-                // Get subject name from matriculated subject
                 const matriculatedSubject = evaluation.matriculatedSubjectId as any;
                 let subjectName = '';
                 if (matriculatedSubject?.subjectId) {
