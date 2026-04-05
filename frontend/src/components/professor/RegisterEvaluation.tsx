@@ -105,9 +105,23 @@ const RegisterEvaluation: React.FC<RegisterEvaluationProps> = ({
     const [examinationTypes, setExaminationTypes] = useState<SelectOption[]>([]);
     const [rows, setRows] = useState<RegisterRowForm[]>([]);
     const [category, setCategory] = useState<EvaluationCategoryType | ''>(initialCategory || '');
-    const [evaluationDate, setEvaluationDate] = useState(
-        initialEvaluationDate || new Date().toISOString().split('T')[0]
-    );
+    const [evaluationDate, setEvaluationDate] = useState(() => {
+        if (initialEvaluationDate) {
+            try {
+                const date = new Date(initialEvaluationDate);
+                if (!isNaN(date.getTime())) {
+                    return date.toISOString().split('T')[0];
+                }
+            } catch (e) {
+                console.error('Error parsing initial date:', e);
+            }
+            // If we can't parse it but it's a string, maybe it's already YYYY-MM-DD
+            if (typeof initialEvaluationDate === 'string' && /^\d{4}-\d{2}-\d{2}/.test(initialEvaluationDate)) {
+                return initialEvaluationDate.split('T')[0];
+            }
+        }
+        return new Date().toISOString().split('T')[0];
+    });
     const [examinationTypeId, setExaminationTypeId] = useState(initialExaminationTypeId || '');
     const [description, setDescription] = useState(initialDescription || '');
     const redirectTimeoutRef = useRef<number | null>(null);
@@ -179,6 +193,13 @@ const RegisterEvaluation: React.FC<RegisterEvaluationProps> = ({
 
             setEvaluationValues(apiEvaluationValues);
             setExaminationTypes(apiExaminationTypes);
+            
+            if (isEditMode && initialExaminationTypeId && !apiExaminationTypes.find(t => t._id === initialExaminationTypeId)) {
+                const foundType = apiExaminationTypes.find(t => t.name === initialExaminationTypeId);
+                if (foundType) {
+                    setExaminationTypeId(foundType._id);
+                }
+            }
 
             const mappedRows = Array.isArray(result.data)
                 ? result.data.map((item) => ({

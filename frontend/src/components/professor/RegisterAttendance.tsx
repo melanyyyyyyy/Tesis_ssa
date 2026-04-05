@@ -71,9 +71,22 @@ const RegisterAttendance: React.FC<RegisterAttendanceProps> = ({
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState<string | null>(null);
     const [isRedirecting, setIsRedirecting] = useState(false);
-    const [attendanceDate, setAttendanceDate] = useState(
-        initialAttendanceDate || new Date().toISOString().split('T')[0]
-    );
+    const [attendanceDate, setAttendanceDate] = useState(() => {
+        if (initialAttendanceDate) {
+            try {
+                const date = new Date(initialAttendanceDate);
+                if (!isNaN(date.getTime())) {
+                    return date.toISOString().split('T')[0];
+                }
+            } catch (e) {
+                console.error('Error parsing initial attendance date:', e);
+            }
+            if (typeof initialAttendanceDate === 'string' && /^\d{4}-\d{2}-\d{2}/.test(initialAttendanceDate)) {
+                return initialAttendanceDate.split('T')[0];
+            }
+        }
+        return new Date().toISOString().split('T')[0];
+    });
     const [rows, setRows] = useState<RegisterAttendanceRowForm[]>([]);
     const redirectTimeoutRef = useRef<number | null>(null);
 

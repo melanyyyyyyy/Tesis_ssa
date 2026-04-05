@@ -35,6 +35,7 @@ interface SubjectReference {
 interface EvaluationHistoryRecord {
     createdAt: string;
     category: string;
+    examinationTypeId: string;
     examinationType: string;
     evaluationDate: string;
     description: string;
@@ -51,6 +52,7 @@ interface EvaluationBatchStudentRow {
 interface EvaluationBatchDetail {
     createdAt: string;
     category: string;
+    examinationTypeId: string;
     examinationType: string;
     evaluationDate: string;
     description: string;
@@ -283,6 +285,25 @@ const RecordsEvaluationView: React.FC = () => {
                                 emptyMessage="No hay calificaciones disponibles para este registro."
                             />
                         </Card>
+
+                        <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+                            <Button
+                                variant="contained"
+                                onClick={() => navigate('/professor/records-evaluation-edit', {
+                                    state: {
+                                        subject: selectedSubject,
+                                        evaluationRecord: displayedBatch,
+                                        returnTo: '/professor/records-evaluation-view',
+                                        returnState: {
+                                            subject: selectedSubject,
+                                            evaluationRecord: displayedBatch
+                                        }
+                                    }
+                                })}
+                            >
+                                Editar
+                            </Button>
+                        </Box>
                     </Stack>
                 )}
 

@@ -61,6 +61,7 @@ export async function getSubjectEvaluationHistory(req: Request, res: Response) {
                 groupedMap.set(createdAtStr, {
                     createdAt: evaluation.createdAt,
                     category: evaluation.category,
+                    examinationTypeId: evaluation.examinationTypeId?._id ? String(evaluation.examinationTypeId._id) : '',
                     examinationType: evaluation.examinationTypeId?.name || '',
                     evaluationDate: evaluation.evaluationDate,
                     description: evaluation.description,
@@ -148,6 +149,7 @@ export async function getSubjectEvaluationBatchDetail(req: Request, res: Respons
             batch: {
                 createdAt: firstEvaluation.createdAt,
                 category: firstEvaluation.category,
+                examinationTypeId: firstEvaluation.examinationTypeId?._id ? String(firstEvaluation.examinationTypeId._id) : '',
                 examinationType: firstEvaluation.examinationTypeId?.name || '',
                 evaluationDate: firstEvaluation.evaluationDate,
                 description: firstEvaluation.description || '',

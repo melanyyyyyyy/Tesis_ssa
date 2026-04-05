@@ -274,6 +274,25 @@ const RecordsAttendanceView: React.FC = () => {
                                 emptyMessage="No hay registros de asistencia disponibles para este lote."
                             />
                         </Card>
+
+                        <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+                            <Button
+                                variant="contained"
+                                onClick={() => navigate('/professor/records-attendance-edit', {
+                                    state: {
+                                        subject: selectedSubject,
+                                        attendanceRecord: displayedBatch,
+                                        returnTo: '/professor/records-attendance-view',
+                                        returnState: {
+                                            subject: selectedSubject,
+                                            attendanceRecord: displayedBatch
+                                        }
+                                    }
+                                })}
+                            >
+                                Editar
+                            </Button>
+                        </Box>
                     </Stack>
                 )}
 

@@ -16,7 +16,9 @@ import RegisterAttendancePage from '../pages/professor/RegisterAttendancePage';
 import RegisterEvaluationPage from '../pages/professor/RegisterEvaluationPage';
 import AcademicRanking from '../pages/professor/AcademicRanking';
 import HistoryRecords from '../pages/professor/Records';
+import RecordsAttendanceEdit from '../pages/professor/RecordsAttendanceEdit';
 import RecordsAttendanceView from '../pages/professor/RecordsAttendanceView';
+import RecordsEvaluationEdit from '../pages/professor/RecordsEvaluationEdit';
 import RecordsEvaluationView from '../pages/professor/RecordsEvaluationView';
 import ProfilePage from '../pages/common/ProfilePage';
 import NotificationPage from '../pages/common/NotificationPage';
@@ -85,7 +87,9 @@ export default function AppRouter() {
           <Route path="/professor/register-evaluation" element={<RegisterEvaluationPage />} />
           <Route path="/professor/academic-ranking" element={<AcademicRanking />} />
           <Route path="/professor/history-records" element={<HistoryRecords />} />
+          <Route path="/professor/records-attendance-edit" element={<RecordsAttendanceEdit />} />
           <Route path="/professor/records-attendance-view" element={<RecordsAttendanceView />} />
+          <Route path="/professor/records-evaluation-edit" element={<RecordsEvaluationEdit />} />
           <Route path="/professor/records-evaluation-view" element={<RecordsEvaluationView />} />
           <Route path="/professor/exams" element={<ProfessorExamCalendarPage />} />
         </Route>

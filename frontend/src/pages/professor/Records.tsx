@@ -24,6 +24,7 @@ interface SubjectReference {
 interface EvaluationHistoryRecord {
     createdAt: string;
     category: string;
+    examinationTypeId: string;
     examinationType: string;
     evaluationDate: string;
     description: string;
@@ -161,10 +162,14 @@ const HistoryRecords: React.FC = () => {
         {
             variant: 'edit' as const,
             label: 'Editar',
-            onClick: (row: EvaluationHistoryRecord) => {
-                console.log('Editar evaluación', row);
-                // navigate('/professor/edit-evaluation', { state: { record: row, subject: selectedSubject } });
-            }
+            onClick: (row: EvaluationHistoryRecord) => navigate('/professor/records-evaluation-edit', {
+                state: {
+                    subject: selectedSubject,
+                    evaluationRecord: row,
+                    returnTo: '/professor/history-records',
+                    returnState: { subject: selectedSubject }
+                }
+            })
         },
         {
             variant: 'delete' as const,
@@ -187,9 +192,14 @@ const HistoryRecords: React.FC = () => {
         {
             variant: 'edit' as const,
             label: 'Editar',
-            onClick: (row: AttendanceHistoryRecord) => {
-                console.log('Editar asistencia', row);
-            }
+            onClick: (row: AttendanceHistoryRecord) => navigate('/professor/records-attendance-edit', {
+                state: {
+                    subject: selectedSubject,
+                    attendanceRecord: row,
+                    returnTo: '/professor/history-records',
+                    returnState: { subject: selectedSubject }
+                }
+            })
         },
         {
             variant: 'delete' as const,
