@@ -86,6 +86,86 @@ export async function getSubjectEvaluationHistory(req: Request, res: Response) {
     }
 }
 
+export async function getSubjectEvaluationBatchDetail(req: Request, res: Response) {
+    try {
+        const professorId = req.user?.id;
+        const subjectId = req.query.subjectId as string | undefined;
+        const createdAt = req.query.createdAt as string | undefined;
+
+        if (!professorId) {
+            return res.status(401).json({ message: 'Usuario no autenticado' });
+        }
+
+        if (!subjectId || !createdAt) {
+            return res.status(400).json({ message: 'subjectId y createdAt son requeridos' });
+        }
+
+        const parsedCreatedAt = new Date(createdAt);
+        if (Number.isNaN(parsedCreatedAt.getTime())) {
+            return res.status(400).json({ message: 'createdAt no tiene un formato válido' });
+        }
+
+        const subject = await SubjectModel.findOne({ _id: subjectId, professorId })
+            .select('_id')
+            .lean();
+
+        if (!subject) {
+            return res.status(404).json({ message: 'Asignatura no encontrada' });
+        }
+
+        const matriculatedSubjects = await MatriculatedSubjectModel.find({ subjectId })
+            .select('_id')
+            .lean();
+        const matriculatedIds = matriculatedSubjects.map((item) => item._id);
+
+        const evaluations = await EvaluationScoreModel.find({
+            matriculatedSubjectId: { $in: matriculatedIds },
+            createdAt: parsedCreatedAt
+        })
+            .populate('studentId', 'firstName lastName')
+            .populate('evaluationValueId', 'value')
+            .populate('examinationTypeId', 'name')
+            .sort({ studentId: 1 })
+            .lean();
+
+        if (evaluations.length === 0) {
+            return res.status(404).json({ message: 'No se encontraron registros para esta evaluación' });
+        }
+
+        const firstEvaluation = evaluations[0] as any;
+        const scores = evaluations.map((item: any) => toNumericScore(item.evaluationValueId?.value));
+
+        const data = evaluations
+            .map((item: any) => ({
+                _id: String(item._id),
+                studentId: String(item.studentId?._id || ''),
+                studentName: `${item.studentId?.firstName || ''} ${item.studentId?.lastName || ''}`.trim() || 'Sin nombre',
+                evaluationValue: item.evaluationValueId?.value || ''
+            }))
+            .sort((a, b) => a.studentName.localeCompare(b.studentName, 'es'));
+
+        return res.status(200).json({
+            batch: {
+                createdAt: firstEvaluation.createdAt,
+                category: firstEvaluation.category,
+                examinationType: firstEvaluation.examinationTypeId?.name || '',
+                evaluationDate: firstEvaluation.evaluationDate,
+                description: firstEvaluation.description || '',
+                evaluationAverage: Number(average(scores).toFixed(2)),
+                subjectName: subject.name || ''
+            },
+            data,
+            totalCount: data.length
+        });
+    } catch (error: any) {
+        console.error('Error in getSubjectEvaluationBatchDetail:', error);
+        return res.status(500).json({
+            success: false,
+            error: error.message || 'Failed to get subject evaluation batch detail.'
+        });
+    }
+}
+
 export async function getSubjectAttendanceHistory(req: Request, res: Response) {
     try {
         const professorId = req.user?.id;
@@ -128,6 +208,78 @@ export async function getSubjectAttendanceHistory(req: Request, res: Response) {
         return res.status(500).json({
             success: false,
             error: error.message || 'Failed to get subject attendance history.'
+        });
+    }
+}
+
+export async function getSubjectAttendanceBatchDetail(req: Request, res: Response) {
+    try {
+        const professorId = req.user?.id;
+        const subjectId = req.query.subjectId as string | undefined;
+        const createdAt = req.query.createdAt as string | undefined;
+
+        if (!professorId) {
+            return res.status(401).json({ message: 'Usuario no autenticado' });
+        }
+
+        if (!subjectId || !createdAt) {
+            return res.status(400).json({ message: 'subjectId y createdAt son requeridos' });
+        }
+
+        const parsedCreatedAt = new Date(createdAt);
+        if (Number.isNaN(parsedCreatedAt.getTime())) {
+            return res.status(400).json({ message: 'createdAt no tiene un formato válido' });
+        }
+
+        const subject = await SubjectModel.findOne({ _id: subjectId, professorId })
+            .select('_id name')
+            .lean();
+
+        if (!subject) {
+            return res.status(404).json({ message: 'Asignatura no encontrada' });
+        }
+
+        const attendances = await AttendanceModel.find({
+            subjectId,
+            createdAt: parsedCreatedAt
+        })
+            .populate('studentId', 'firstName lastName')
+            .sort({ studentId: 1 })
+            .lean();
+
+        if (attendances.length === 0) {
+            return res.status(404).json({ message: 'No se encontraron registros para esta asistencia' });
+        }
+
+        const firstAttendance = attendances[0] as any;
+        const presentCount = attendances.filter((item: any) => item.isPresent).length;
+
+        const data = attendances
+            .map((item: any) => ({
+                _id: String(item._id),
+                studentId: String(item.studentId?._id || ''),
+                studentName: `${item.studentId?.firstName || ''} ${item.studentId?.lastName || ''}`.trim() || 'Sin nombre',
+                isPresent: Boolean(item.isPresent),
+                justified: Boolean(item.justified),
+                justificationReason: item.justificationReason || ''
+            }))
+            .sort((a, b) => a.studentName.localeCompare(b.studentName, 'es'));
+
+        return res.status(200).json({
+            batch: {
+                createdAt: firstAttendance.createdAt,
+                attendanceDate: firstAttendance.attendanceDate,
+                averageAttendance: Number(((presentCount / attendances.length) * 100).toFixed(2)),
+                subjectName: subject.name || ''
+            },
+            data,
+            totalCount: data.length
+        });
+    } catch (error: any) {
+        console.error('Error in getSubjectAttendanceBatchDetail:', error);
+        return res.status(500).json({
+            success: false,
+            error: error.message || 'Failed to get subject attendance batch detail.'
         });
     }
 }

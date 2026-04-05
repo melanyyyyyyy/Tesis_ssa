@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
-import { Container, Stack, Typography, Card, Box } from '@mui/material';
-import { useLocation } from 'react-router-dom';
+import { Container, Stack, Typography, Card, Box, Tooltip, IconButton } from '@mui/material';
+import { Refresh as RefreshIcon } from '@mui/icons-material';
+import { useLocation, useNavigate } from 'react-router-dom';
 import MainLayout from '../../layouts/MainLayout';
 import PageHeader from '../../components/common/PageHeader';
 import ReusableTable, { type ReusableTableColumn } from '../../components/common/ReusableTable';
@@ -45,6 +46,7 @@ const categoryLabels: Record<string, string> = {
 
 const HistoryRecords: React.FC = () => {
     const location = useLocation();
+    const navigate = useNavigate();
     const { token } = useAuth();
     const [refreshKey, setRefreshKey] = useState(0);
     const [deleteModal, setDeleteModal] = useState<{
@@ -149,10 +151,12 @@ const HistoryRecords: React.FC = () => {
         {
             variant: 'view' as const,
             label: 'Visualizar',
-            onClick: (row: EvaluationHistoryRecord) => {
-                console.log('Visualizar evaluación', row);
-                // navigate('/professor/evaluation-detail', { state: { record: row, subject: selectedSubject } });
-            }
+            onClick: (row: EvaluationHistoryRecord) => navigate('/professor/records-evaluation-view', {
+                state: {
+                    subject: selectedSubject,
+                    evaluationRecord: row
+                }
+            })
         },
         {
             variant: 'edit' as const,
@@ -167,15 +171,18 @@ const HistoryRecords: React.FC = () => {
             label: 'Eliminar',
             onClick: (row: EvaluationHistoryRecord) => handleDeleteClick('evaluation', row)
         }
-    ], []);
+    ], [navigate, selectedSubject]);
 
     const attendanceActions = useMemo(() => [
         {
             variant: 'view' as const,
             label: 'Visualizar',
-            onClick: (row: AttendanceHistoryRecord) => {
-                console.log('Visualizar asistencia', row);
-            }
+            onClick: (row: AttendanceHistoryRecord) => navigate('/professor/records-attendance-view', {
+                state: {
+                    subject: selectedSubject,
+                    attendanceRecord: row
+                }
+            })
         },
         {
             variant: 'edit' as const,
@@ -189,7 +196,7 @@ const HistoryRecords: React.FC = () => {
             label: 'Eliminar',
             onClick: (row: AttendanceHistoryRecord) => handleDeleteClick('attendance', row)
         }
-    ], []);
+    ], [navigate, selectedSubject]);
 
     const pdfTables = useMemo<ExportTableConfig<any>[]>(() => [
         {
@@ -217,14 +224,22 @@ const HistoryRecords: React.FC = () => {
                         ? `${selectedSubject.name} | Año académico: ${selectedSubject.academicYear} | Carrera: ${subjectCareerName}`
                         : 'No hay asignatura seleccionada.'}
                     showBackButton={true}
+                    backTo="/professor/subject-detail"
                     action={
-                        <ExportToPDF
-                            token={token}
-                            tables={pdfTables}
-                            fileName={`Historial_${selectedSubject?.name || 'Registros'}.pdf`}
-                            institutionName="Sistema de Seguimiento Académico"
-                            reportSubtitle={`Historial de Evaluaciones y Asistencias - ${selectedSubject?.name}`}
-                        />
+                        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                            <Tooltip title="Actualizar datos">
+                                <IconButton color="primary" onClick={handleRefresh}>
+                                    <RefreshIcon />
+                                </IconButton>
+                            </Tooltip>
+                            <ExportToPDF
+                                token={token}
+                                tables={pdfTables}
+                                fileName={`Historial_${selectedSubject?.name || 'Registros'}.pdf`}
+                                institutionName="Sistema de Seguimiento Académico"
+                                reportSubtitle={`Historial de Evaluaciones y Asistencias - ${selectedSubject?.name}`}
+                            />
+                        </Box>
                     }
                 />
 

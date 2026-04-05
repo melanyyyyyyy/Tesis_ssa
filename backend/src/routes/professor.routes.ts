@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import {
     getAcademicRanking,
+    getSubjectAttendanceBatchDetail,
+    getSubjectEvaluationBatchDetail,
     getProfessorSubjects,
     getSubjectEvaluationHistory,
     getSubjectAttendanceHistory,
@@ -21,6 +23,8 @@ router.use(authMiddleware);
 router.use(authorize(['professor']));
 
 router.get('/subjects', getProfessorSubjects);
+router.get('/evaluation-batch-detail', getSubjectEvaluationBatchDetail);
+router.get('/attendance-batch-detail', getSubjectAttendanceBatchDetail);
 router.get('/subject-evaluation-history', getSubjectEvaluationHistory);
 router.get('/subject-attendance-history', getSubjectAttendanceHistory);
 router.get('/subject-students', getSubjectStudentsSummary);
