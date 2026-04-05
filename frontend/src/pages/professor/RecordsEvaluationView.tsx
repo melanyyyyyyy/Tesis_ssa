@@ -11,6 +11,7 @@ import {
     Tooltip,
     Typography
 } from '@mui/material';
+import EditIcon from '@mui/icons-material/Edit';
 import { Refresh as RefreshIcon } from '@mui/icons-material';
 import { useLocation, useNavigate } from 'react-router-dom';
 import MainLayout from '../../layouts/MainLayout';
@@ -73,6 +74,13 @@ const formatDate = (value?: string) => {
     return parsed.toLocaleDateString();
 };
 
+const formatEvaluationValue = (value?: string) => {
+    const normalized = (value || '').trim().toUpperCase();
+    if (normalized === 'NP') return 'No presentado';
+    if (normalized === 'CO') return 'Convalidado';
+    return value || '';
+};
+
 const RecordsEvaluationView: React.FC = () => {
     const location = useLocation();
     const navigate = useNavigate();
@@ -106,7 +114,11 @@ const RecordsEvaluationView: React.FC = () => {
 
     const columns = useMemo<ReusableTableColumn<EvaluationBatchStudentRow>[]>(() => [
         { field: 'studentName', headerName: 'Estudiante' },
-        { field: 'evaluationValue', headerName: 'Nota' }
+        {
+            field: 'evaluationValue',
+            headerName: 'Nota',
+            renderCell: (value) => formatEvaluationValue(typeof value === 'string' ? value : '')
+        }
     ], []);
 
     const loadBatchDetail = useCallback(async () => {
@@ -289,6 +301,8 @@ const RecordsEvaluationView: React.FC = () => {
                         <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
                             <Button
                                 variant="contained"
+                                color="secondary"
+                                startIcon={<EditIcon />}
                                 onClick={() => navigate('/professor/records-evaluation-edit', {
                                     state: {
                                         subject: selectedSubject,

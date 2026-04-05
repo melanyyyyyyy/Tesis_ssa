@@ -18,6 +18,8 @@ import {
     Typography,
     useTheme
 } from '@mui/material';
+import SaveIcon from '@mui/icons-material/Save';
+import { ModalDialog } from '../common/ModalDialog';
 import { useAuth } from '../../context/AuthContext';
 
 const API_BASE = import.meta.env.VITE_API_BASE;
@@ -101,6 +103,7 @@ const RegisterEvaluation: React.FC<RegisterEvaluationProps> = ({
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState<string | null>(null);
     const [isRedirecting, setIsRedirecting] = useState(false);
+    const [cancelModalOpen, setCancelModalOpen] = useState(false);
     const [evaluationValues, setEvaluationValues] = useState<SelectOption[]>([]);
     const [examinationTypes, setExaminationTypes] = useState<SelectOption[]>([]);
     const [rows, setRows] = useState<RegisterRowForm[]>([]);
@@ -258,6 +261,20 @@ const RegisterEvaluation: React.FC<RegisterEvaluationProps> = ({
                 evaluationValueId: value
             };
         }));
+    };
+
+    const handleCancelClick = () => {
+        if (!onCancel || saving || isRedirecting) return;
+        setCancelModalOpen(true);
+    };
+
+    const handleCloseCancelModal = () => {
+        setCancelModalOpen(false);
+    };
+
+    const handleConfirmCancel = () => {
+        setCancelModalOpen(false);
+        onCancel?.();
     };
 
     const handleSave = async () => {
@@ -478,14 +495,35 @@ const RegisterEvaluation: React.FC<RegisterEvaluationProps> = ({
 
             <Stack direction="row" justifyContent="flex-end" spacing={2} sx={{ mt: 2 }}>
                 {onCancel && (
-                    <Button variant="outlined" onClick={onCancel} disabled={saving || isRedirecting}>
+                    <Button
+                        variant="contained"
+                        color="error"
+                        onClick={handleCancelClick}
+                        disabled={saving || isRedirecting}
+                    >
                         Cancelar
                     </Button>
                 )}
-                <Button variant="contained" onClick={handleSave} disabled={saving || isRedirecting || loading || rows.length === 0}>
+                <Button
+                    variant="contained"
+                    color="secondary"
+                    onClick={handleSave}
+                    disabled={saving || isRedirecting || loading || rows.length === 0}
+                    startIcon={<SaveIcon />}
+                >
                     {saving ? 'Guardando...' : isRedirecting ? 'Redirigiendo...' : 'Guardar registro'}
                 </Button>
             </Stack>
+            <ModalDialog
+                open={cancelModalOpen}
+                onClose={handleCloseCancelModal}
+                onConfirm={handleConfirmCancel}
+                title="Confirmar cancelación"
+                description="Estas seguro de que deseas cancelar? Los cambios no guardados se perderán"
+                confirmText="Sí, cancelar"
+                cancelText="Seguir editando"
+                variant="error"
+            />
         </Card>
     );
 };

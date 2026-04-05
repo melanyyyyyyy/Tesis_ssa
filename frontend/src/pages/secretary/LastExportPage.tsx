@@ -17,6 +17,13 @@ import ReusableTable, { type ReusableTableAction, type ReusableTableColumn } fro
 
 const API_BASE = import.meta.env.VITE_API_BASE;
 
+const formatEvaluationValue = (value?: string) => {
+    const normalized = String(value || '').trim().toUpperCase();
+    if (normalized === 'NP') return 'No presentado';
+    if (normalized === 'CO') return 'Convalidado';
+    return value || 'N/A';
+};
+
 const LastExportPage: React.FC = () => {
     const { token, logout } = useAuth();
     const [error, setError] = useState<string | null>(null);
@@ -78,7 +85,7 @@ const LastExportPage: React.FC = () => {
                 const evaluationValue = value as Evaluation['evaluationValueId'];
                 return (
                     <Chip
-                        label={evaluationValue?.value || 'N/A'}
+                        label={formatEvaluationValue(evaluationValue?.value)}
                         size="small"
                         sx={{ fontWeight: 'bold' }}
                     />

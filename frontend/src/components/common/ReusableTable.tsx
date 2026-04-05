@@ -127,7 +127,7 @@ const ReusableTable = <T extends object>({
     queryParams,
     serverPagination = false,
     rowsPerPageOptions = [10, 25, 50, 100],
-    initialRowsPerPage = 50,
+    initialRowsPerPage = 10,
     emptyMessage = 'No hay datos disponibles',
     tableAriaLabel = 'tabla reutilizable',
     refreshKey,

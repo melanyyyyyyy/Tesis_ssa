@@ -71,6 +71,10 @@ interface MessageDeletedPayload {
     lastMessage: ChatMessage | null;
 }
 
+type ChatTimelineItem =
+    | { type: 'separator'; key: string; label: string }
+    | { type: 'message'; key: string; message: ChatMessage };
+
 const getSocketBaseUrl = () => {
     if (!API_BASE) return window.location.origin;
     return API_BASE.replace(/\/api\/?$/, '');
@@ -92,6 +96,41 @@ const formatMessageTime = (value?: string) => {
     return new Intl.DateTimeFormat('es-CU', {
         hour: '2-digit',
         minute: '2-digit'
+    }).format(date);
+};
+
+const getMessageDateKey = (value?: string) => {
+    if (!value) return '';
+
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+};
+
+const isSameCalendarDay = (left: Date, right: Date) => (
+    left.getDate() === right.getDate() &&
+    left.getMonth() === right.getMonth() &&
+    left.getFullYear() === right.getFullYear()
+);
+
+const formatMessageDateLabel = (value?: string) => {
+    if (!value) return '';
+
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+
+    if (isSameCalendarDay(date, new Date())) {
+        return 'Hoy';
+    }
+
+    return new Intl.DateTimeFormat('es-CU', {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric'
     }).format(date);
 };
 
@@ -138,6 +177,31 @@ const ChatPage: React.FC = () => {
         () => conversations.find((conversation) => conversation._id === selectedConversationId) || null,
         [conversations, selectedConversationId]
     );
+
+    const timelineItems = useMemo<ChatTimelineItem[]>(() => {
+        const items: ChatTimelineItem[] = [];
+        let currentDateKey = '';
+
+        messages.forEach((message) => {
+            const nextDateKey = getMessageDateKey(message.createdAt);
+            if (nextDateKey && nextDateKey !== currentDateKey) {
+                currentDateKey = nextDateKey;
+                items.push({
+                    type: 'separator',
+                    key: `separator-${nextDateKey}`,
+                    label: formatMessageDateLabel(message.createdAt)
+                });
+            }
+
+            items.push({
+                type: 'message',
+                key: message._id,
+                message
+            });
+        });
+
+        return items;
+    }, [messages]);
 
     const authorizedFetch = useCallback(async (path: string, options: RequestInit = {}) => {
         if (!token) {
@@ -522,11 +586,38 @@ const ChatPage: React.FC = () => {
                                         </Box>
                                     ) : (
                                         <Stack spacing={2}>
-                                            {messages.map((message) => {
+                                            {timelineItems.map((item) => {
+                                                if (item.type === 'separator') {
+                                                    return (
+                                                        <Stack
+                                                            key={item.key}
+                                                            direction="row"
+                                                            spacing={2}
+                                                            alignItems="center"
+                                                            sx={{ py: 0.5 }}
+                                                        >
+                                                            <Divider sx={{ flex: 1 }} />
+                                                            <Typography
+                                                                variant="caption"
+                                                                sx={{
+                                                                    color: 'primary.main',
+                                                                    fontWeight: 700,
+                                                                    textTransform: item.label === 'Hoy' ? 'uppercase' : 'none',
+                                                                    letterSpacing: item.label === 'Hoy' ? 0.8 : 0
+                                                                }}
+                                                            >
+                                                                {item.label}
+                                                            </Typography>
+                                                            <Divider sx={{ flex: 1 }} />
+                                                        </Stack>
+                                                    );
+                                                }
+
+                                                const { message } = item;
                                                 const isOwnMessage = message.sender._id === user?._id;
                                                 return (
                                                     <Box
-                                                        key={message._id}
+                                                        key={item.key}
                                                         sx={{
                                                             display: 'flex',
                                                             justifyContent: isOwnMessage ? 'flex-end' : 'flex-start'

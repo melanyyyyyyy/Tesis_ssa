@@ -418,6 +418,8 @@ const StudentDetail: React.FC = () => {
                                 fileName={`detalle-estudiante-${detail.studentSummary.studentName}`}
                                 buttonLabel="Exportar a PDF"
                                 logoUrl="/images/uho-blue.png"
+                                institutionName="Sistema de Seguimiento Académico"
+                                reportSubtitle={`Historial de Evaluaciones y Asistencias - ${detail.studentSummary.studentName} - ${detail.subject.name}`}
                                 onUnauthorized={logout}
                                 onError={(message) => setInfoMessage(message)}
                                 tables={[

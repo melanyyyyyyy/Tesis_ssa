@@ -11,6 +11,7 @@ import {
     Tooltip,
     Typography
 } from '@mui/material';
+import EditIcon from '@mui/icons-material/Edit';
 import { Refresh as RefreshIcon } from '@mui/icons-material';
 import { useLocation, useNavigate } from 'react-router-dom';
 import MainLayout from '../../layouts/MainLayout';
@@ -278,6 +279,8 @@ const RecordsAttendanceView: React.FC = () => {
                         <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
                             <Button
                                 variant="contained"
+                                color="secondary"
+                                startIcon={<EditIcon />}
                                 onClick={() => navigate('/professor/records-attendance-edit', {
                                     state: {
                                         subject: selectedSubject,
