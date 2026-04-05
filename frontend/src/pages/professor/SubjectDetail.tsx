@@ -208,6 +208,10 @@ const SubjectDetail: React.FC = () => {
                         color="primary"
                         disableElevation
                         startIcon={<HistoryIcon />}
+                        disabled={!selectedSubject}
+                        onClick={() => selectedSubject && navigate('/professor/history-records', {
+                            state: { subject: selectedSubject }
+                        })}
                     >
                         Historial de registros
                     </Button>

@@ -13,6 +13,187 @@ import {
     EvaluationScoreModel
 } from '../models/system/index.js';
 
+const toNumericScore = (value: unknown) => {
+    if (typeof value === 'number') return value;
+    if (typeof value !== 'string') return 2;
+    const normalized = value.trim().toUpperCase();
+    if (normalized === 'NP') return 2;
+    if (normalized === 'CO') return 5;
+
+    const match = value.match(/-?\d+(?:[.,]\d+)?/);
+    if (!match) return 2;
+    const parsed = Number.parseFloat(match[0].replace(',', '.'));
+    return Number.isFinite(parsed) ? Math.max(2, Math.min(5, parsed)) : 2;
+};
+
+const average = (values: number[]) => {
+    if (!values.length) return 2;
+    const total = values.reduce((sum, current) => sum + current, 0);
+    return total / values.length;
+};
+
+export async function getSubjectEvaluationHistory(req: Request, res: Response) {
+    try {
+        const professorId = req.user?.id;
+        const subjectId = req.query.subjectId as string | undefined;
+        if (!professorId) return res.status(401).json({ message: 'Usuario no autenticado' });
+        if (!subjectId) return res.status(400).json({ message: 'subjectId es requerido' });
+
+        const subject = await SubjectModel.findOne({ _id: subjectId, professorId }).select('_id').lean();
+        if (!subject) return res.status(404).json({ message: 'Asignatura no encontrada' });
+
+        const matriculatedSubjects = await MatriculatedSubjectModel.find({ subjectId }).select('_id').lean();
+        const matriculatedIds = matriculatedSubjects.map((m) => m._id);
+
+        const evaluations = await EvaluationScoreModel.find({
+            matriculatedSubjectId: { $in: matriculatedIds }
+        })
+            .populate('evaluationValueId', 'value')
+            .populate('examinationTypeId', 'name')
+            .sort({ createdAt: -1 })
+            .lean();
+
+        // Group by createdAt
+        const groupedMap = new Map<string, any>();
+        evaluations.forEach((evaluation: any) => {
+            const createdAtStr = evaluation.createdAt.toISOString();
+            if (!groupedMap.has(createdAtStr)) {
+                groupedMap.set(createdAtStr, {
+                    createdAt: evaluation.createdAt,
+                    category: evaluation.category,
+                    examinationType: evaluation.examinationTypeId?.name || '',
+                    evaluationDate: evaluation.evaluationDate,
+                    description: evaluation.description,
+                    scores: []
+                });
+            }
+            const numericValue = toNumericScore(evaluation.evaluationValueId?.value);
+            groupedMap.get(createdAtStr).scores.push(numericValue);
+        });
+
+        const data = Array.from(groupedMap.values()).map(group => ({
+            ...group,
+            evaluationAverage: Number(average(group.scores).toFixed(2))
+        }));
+
+        return res.status(200).json({ data });
+    } catch (error: any) {
+        console.error('Error in getSubjectEvaluationHistory:', error);
+        return res.status(500).json({
+            success: false,
+            error: error.message || 'Failed to get subject evaluation history.'
+        });
+    }
+}
+
+export async function getSubjectAttendanceHistory(req: Request, res: Response) {
+    try {
+        const professorId = req.user?.id;
+        const subjectId = req.query.subjectId as string | undefined;
+        if (!professorId) return res.status(401).json({ message: 'Usuario no autenticado' });
+        if (!subjectId) return res.status(400).json({ message: 'subjectId es requerido' });
+
+        const subject = await SubjectModel.findOne({ _id: subjectId, professorId }).select('_id').lean();
+        if (!subject) return res.status(404).json({ message: 'Asignatura no encontrada' });
+
+        const attendances = await AttendanceModel.find({ subjectId })
+            .sort({ createdAt: -1 })
+            .lean();
+
+        // Group by createdAt
+        const groupedMap = new Map<string, any>();
+        attendances.forEach((attendance: any) => {
+            const createdAtStr = attendance.createdAt.toISOString();
+            if (!groupedMap.has(createdAtStr)) {
+                groupedMap.set(createdAtStr, {
+                    createdAt: attendance.createdAt,
+                    attendanceDate: attendance.attendanceDate,
+                    presentCount: 0,
+                    totalCount: 0
+                });
+            }
+            const group = groupedMap.get(createdAtStr);
+            group.totalCount++;
+            if (attendance.isPresent) group.presentCount++;
+        });
+
+        const data = Array.from(groupedMap.values()).map(group => ({
+            ...group,
+            averageAttendance: group.totalCount > 0 ? Number(((group.presentCount / group.totalCount) * 100).toFixed(2)) : 0
+        }));
+
+        return res.status(200).json({ data });
+    } catch (error: any) {
+        console.error('Error in getSubjectAttendanceHistory:', error);
+        return res.status(500).json({
+            success: false,
+            error: error.message || 'Failed to get subject attendance history.'
+        });
+    }
+}
+
+export async function deleteSubjectEvaluationBatch(req: Request, res: Response) {
+    try {
+        const professorId = req.user?.id;
+        const { subjectId, createdAt } = req.body;
+        if (!professorId) return res.status(401).json({ message: 'Usuario no autenticado' });
+        if (!subjectId || !createdAt) return res.status(400).json({ message: 'subjectId y createdAt son requeridos' });
+
+        const subject = await SubjectModel.findOne({ _id: subjectId, professorId }).select('_id').lean();
+        if (!subject) return res.status(404).json({ message: 'Asignatura no encontrada' });
+
+        const matriculatedSubjects = await MatriculatedSubjectModel.find({ subjectId }).select('_id').lean();
+        const matriculatedIds = matriculatedSubjects.map((m) => m._id);
+
+        const deleteResult = await EvaluationScoreModel.deleteMany({
+            matriculatedSubjectId: { $in: matriculatedIds },
+            createdAt: new Date(createdAt)
+        });
+
+        return res.status(200).json({
+            success: true,
+            message: `${deleteResult.deletedCount} registros de evaluación eliminados correctamente.`,
+            deletedCount: deleteResult.deletedCount
+        });
+    } catch (error: any) {
+        console.error('Error in deleteSubjectEvaluationBatch:', error);
+        return res.status(500).json({
+            success: false,
+            error: error.message || 'Failed to delete evaluation batch.'
+        });
+    }
+}
+
+export async function deleteSubjectAttendanceBatch(req: Request, res: Response) {
+    try {
+        const professorId = req.user?.id;
+        const { subjectId, createdAt } = req.body;
+        if (!professorId) return res.status(401).json({ message: 'Usuario no autenticado' });
+        if (!subjectId || !createdAt) return res.status(400).json({ message: 'subjectId y createdAt son requeridos' });
+
+        const subject = await SubjectModel.findOne({ _id: subjectId, professorId }).select('_id').lean();
+        if (!subject) return res.status(404).json({ message: 'Asignatura no encontrada' });
+
+        const deleteResult = await AttendanceModel.deleteMany({
+            subjectId,
+            createdAt: new Date(createdAt)
+        });
+
+        return res.status(200).json({
+            success: true,
+            message: `${deleteResult.deletedCount} registros de asistencia eliminados correctamente.`,
+            deletedCount: deleteResult.deletedCount
+        });
+    } catch (error: any) {
+        console.error('Error in deleteSubjectAttendanceBatch:', error);
+        return res.status(500).json({
+            success: false,
+            error: error.message || 'Failed to delete attendance batch.'
+        });
+    }
+}
+
+
 export async function getProfessorSubjects(req: Request, res: Response) {
     try {
         const professorId = req.user?.id;
@@ -50,25 +231,6 @@ export async function getProfessorSubjects(req: Request, res: Response) {
         });
     }
 }
-
-const toNumericScore = (value: unknown) => {
-    if (typeof value === 'number') return value;
-    if (typeof value !== 'string') return 2;
-    const normalized = value.trim().toUpperCase();
-    if (normalized === 'NP') return 2;
-    if (normalized === 'CO') return 5;
-
-    const match = value.match(/-?\d+(?:[.,]\d+)?/);
-    if (!match) return 2;
-    const parsed = Number.parseFloat(match[0].replace(',', '.'));
-    return Number.isFinite(parsed) ? Math.max(2, Math.min(5, parsed)) : 2;
-};
-
-const average = (values: number[]) => {
-    if (!values.length) return 2;
-    const total = values.reduce((sum, current) => sum + current, 0);
-    return total / values.length;
-};
 
 type EvaluationRowForAverage = {
     matriculatedSubjectId: unknown;
@@ -908,6 +1070,7 @@ export async function upsertSubjectEvaluationRegister(req: Request, res: Respons
 
         const sanitizedDescription = (description || '').trim();
         const savedRows: unknown[] = [];
+        const batchTimestamp = new Date();
 
         for (const entry of entries) {
             if (!entry?.matriculatedSubjectId || !entry.evaluationValueId) {
@@ -941,6 +1104,8 @@ export async function upsertSubjectEvaluationRegister(req: Request, res: Respons
                     evaluation.examinationTypeId = undefined;
                 }
                 evaluation.registrationDate = null;
+                evaluation.createdAt = batchTimestamp;
+                evaluation.updatedAt = batchTimestamp;
                 await evaluation.save();
                 savedRows.push(evaluation.toObject());
             } else {
@@ -952,7 +1117,9 @@ export async function upsertSubjectEvaluationRegister(req: Request, res: Respons
                     description: sanitizedDescription,
                     examinationTypeId: category === EvaluationCategory.FINAL_EVALUATION ? examinationTypeId : undefined,
                     evaluationDate: parsedEvaluationDate,
-                    registrationDate: null
+                    registrationDate: null,
+                    createdAt: batchTimestamp,
+                    updatedAt: batchTimestamp
                 });
                 savedRows.push(created.toObject());
             }
@@ -1176,6 +1343,7 @@ export async function upsertSubjectAttendanceRegister(req: Request, res: Respons
         }
 
         const savedRows: unknown[] = [];
+        const batchTimestamp = new Date();
 
         for (const entry of entries) {
             if (!entry?.studentId || !validStudentIdSet.has(String(entry.studentId))) {
@@ -1211,6 +1379,8 @@ export async function upsertSubjectAttendanceRegister(req: Request, res: Respons
                 attendance.isPresent = isPresent;
                 attendance.justified = justified;
                 attendance.justificationReason = justificationReason;
+                attendance.createdAt = batchTimestamp;
+                attendance.updatedAt = batchTimestamp;
                 await attendance.save();
                 savedRows.push(attendance.toObject());
             } else {
@@ -1220,7 +1390,9 @@ export async function upsertSubjectAttendanceRegister(req: Request, res: Respons
                     attendanceDate: parsedAttendanceDate,
                     isPresent,
                     justified,
-                    justificationReason
+                    justificationReason,
+                    createdAt: batchTimestamp,
+                    updatedAt: batchTimestamp
                 });
                 savedRows.push(created.toObject());
             }

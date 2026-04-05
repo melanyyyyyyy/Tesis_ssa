@@ -2,12 +2,14 @@ import { Schema, model, Document, Types } from 'mongoose';
 
 export interface IAttendance extends Document {
     _id: Types.ObjectId;
-    studentId: Types.ObjectId;        
-    subjectId: Types.ObjectId; 
-    attendanceDate: Date;                
-    isPresent: boolean;       
+    studentId: Types.ObjectId;
+    subjectId: Types.ObjectId;
+    attendanceDate: Date;
+    isPresent: boolean;
     justified: boolean;
     justificationReason?: string;
+    createdAt: Date;
+    updatedAt: Date;
 }
 
 const AttendanceSchema = new Schema<IAttendance>({
@@ -61,12 +63,12 @@ AttendanceSchema.methods.toJSON = function () {
 
 AttendanceSchema.pre('save', async function (this: IAttendance) {
     const MatriculatedSubject = model('MatriculatedSubject');
-    
+
     const matriculated = await MatriculatedSubject.findOne({
         studentId: this.studentId,
         subjectId: this.subjectId
     });
-    
+
     if (!matriculated) {
         throw new Error(
             `The student does not have the subject enrolled. ` +
