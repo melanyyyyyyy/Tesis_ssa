@@ -28,7 +28,7 @@ export const AuthController = {
             return;
         }
 
-        if (ENV.NODE_ENV !== 'production' && (username === 'test_secretary' || username === 'test_professor')) {
+        if (ENV.NODE_ENV !== 'production' && (username === 'test_secretary' || username === 'test_professor' || username === 'test_vicedean')) {
             try {
                 if (password !== ENV.TEST_USER_PASSWORD) {
                     res.status(401).json({ error: 'Invalid password for test user' });

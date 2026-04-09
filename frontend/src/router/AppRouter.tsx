@@ -26,6 +26,8 @@ import ProfessorDashboard from '../pages/professor/ProfessorDashboard';
 import SubjectDetail from '../pages/professor/SubjectDetail';
 import StudentDetail from '../pages/professor/StudentDetail';
 import ChatPage from '../pages/professor/Chat';
+import VicedeanDashboard from '../pages/vicedean/VicedeanDashboard';
+import TeachingAssignmentsPage from '../pages/vicedean/TeachingAssignmentsPage';
 
 const ProtectedRoute = ({ allowedRoles }: { allowedRoles?: string[] }) => {
   const { isAuthenticated, isLoading, user } = useAuth(); 
@@ -93,6 +95,12 @@ export default function AppRouter() {
           <Route path="/professor/records-evaluation-view" element={<RecordsEvaluationView />} />
           <Route path="/professor/exams" element={<ProfessorExamCalendarPage />} />
         </Route>
+
+        {/* Vicedean Routes */}
+         <Route element={<ProtectedRoute allowedRoles={['vicedean']} />}>
+          <Route path="/vicedean/dashboard" element={<VicedeanDashboard />} />
+          <Route path="/vicedean/teaching-assignments" element={<TeachingAssignmentsPage />} />
+         </Route>
 
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>

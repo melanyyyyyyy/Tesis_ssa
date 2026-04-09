@@ -1,7 +1,7 @@
 import mongoose from 'mongoose';
 import dotenv from 'dotenv';
-import { UserModel, RoleModel } from '../models/system/index.js';
-import { SubjectModel } from '../models/sigenu/index.js';
+import { UserModel, RoleModel, VicedeanModel } from '../models/system/index.js';
+import { SubjectModel, FacultyModel } from '../models/sigenu/index.js';
 import { ENV } from '../config/envs.js'
 
 /*
@@ -92,8 +92,107 @@ async function createProfessor() {
     }
 }
 
+async function createVicedean() {
+    try {
+        console.log('Connecting to MongoDB...');
+        await mongoose.connect(MONGO_URI);
+        console.log('Connected.');
+
+        const vicedeanRole = await RoleModel.findOne({ name: 'vicedean' });
+        if (!vicedeanRole) {
+            console.error("Error: Role 'vicedean' not found. Please run seedRoles.ts first.");
+            return;
+        }
+
+        const userData = {
+            email: 'test_vicedean',
+            identification: '10000000002',
+            firstName: 'Vicedeano',
+            lastName: 'De Prueba',
+            roleId: vicedeanRole._id,
+            isActive: true
+        };
+
+        let user = await UserModel.findOne({ identification: userData.identification });
+
+        if (user) {
+            console.log('User already exists.');
+            return;
+        } else {
+            console.log('Creating new user...');
+            user = await UserModel.create(userData);
+            console.log(`User created: ${user.email} with role ${vicedeanRole.name}`);
+        }
+
+    } catch (error) {
+        console.error('Error creating vicedean user:', error);
+    } finally {
+        await mongoose.disconnect();
+        console.log('Disconnected.');
+    }
+}
+
+async function seedVicedeanWithFaculty() {
+    try {
+        console.log('Connecting to MongoDB...');
+        await mongoose.connect(MONGO_URI);
+        console.log('Connected.');
+
+        const vicedeanRole = await RoleModel.findOne({ name: 'vicedean' });
+        if (!vicedeanRole) {
+            console.error("Error: Role 'vicedean' not found.");
+            return;
+        }
+
+        const identification = '10000000002';
+        let user = await UserModel.findOne({ identification });
+
+        if (!user) {
+            console.log('Creating new user...');
+            user = await UserModel.create({
+                email: 'test_vicedean',
+                identification: identification,
+                firstName: 'Vicedeano',
+                lastName: 'De Prueba',
+                roleId: vicedeanRole._id,
+                isActive: true
+            });
+            console.log(`User created: ${user.email}`);
+        } else {
+            console.log('User already exists.');
+        }
+
+        const sigenId = "06";
+        const faculty = await FacultyModel.findOne({ sigenId });
+
+        if (!faculty) {
+            console.error(`Error: Faculty with sigenId ${sigenId} not found.`);
+            return;
+        }
+
+        const vicedeanEntry = await VicedeanModel.findOneAndUpdate(
+            { userId: user._id }, 
+            { 
+                userId: user._id, 
+                facultyId: faculty._id 
+            },
+            { upsert: true, new: true }
+        );
+
+        console.log(`Success: Vicedean linked to faculty: ${faculty.name}`);
+
+    } catch (error) {
+        console.error('Error in seed process:', error);
+    } finally {
+        await mongoose.disconnect();
+        console.log('Disconnected.');
+    }
+}
+
 await createSecretary();
 await createProfessor();
+await createVicedean();
+await seedVicedeanWithFaculty()
 
 /*
 db.subjects.updateOne(
