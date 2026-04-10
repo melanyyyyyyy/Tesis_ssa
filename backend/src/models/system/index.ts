@@ -8,3 +8,4 @@ export { default as PendingDeletionModel, type IPendingDeletion } from './Pendin
 export { default as RoleModel, type IRole } from './Role.js';
 export { default as UserModel, type IUser } from './User.js';
 export { default as VicedeanModel, type IVicedean } from './Vicedean.js';
+export { default as SecretaryModel, type ISecretary } from './Secretary.js';

@@ -97,23 +97,23 @@ async function updateSyncNotification(EvaluationModel: any) {
     });
 
     const Role = model('Role');
-    const secretaryRole = await Role.findOne({ name: 'secretary' });
+    const adminRole = await Role.findOne({ name: 'admin' });
 
-    if (!secretaryRole) {
-      console.warn('Role secretary not found. Skipping notification update.');
+    if (!adminRole) {
+      console.warn('Role admin not found. Skipping notification update.');
       return;
     }
 
     const User = model('User');
-    const secretaries = await User.find({ roleId: secretaryRole._id });
+    const admins = await User.find({ roleId: adminRole._id });
 
-    if (secretaries.length === 0) return;
+    if (admins.length === 0) return;
 
     const Notification = model('Notification');
 
     if (pendingCount === 0) {
       await Notification.deleteMany({
-        recipientId: { $in: secretaries.map(s => s._id) },
+        recipientId: { $in: admins.map(s => s._id) },
         type: 'SYSTEM_ALERT',
         title: 'Sincronización Pendiente'
       });
@@ -122,10 +122,10 @@ async function updateSyncNotification(EvaluationModel: any) {
 
     const message = `Hay ${pendingCount} notas pendientes (nuevas o modificadas) que aún no han sido importadas al sistema SIGENU.`;
 
-    const updates = secretaries.map(secretary => {
+    const updates = admins.map(admin => {
       return Notification.findOneAndUpdate(
         {
-          recipientId: secretary._id,
+          recipientId: admin._id,
           type: 'SYSTEM_ALERT',
           title: 'Sincronización Pendiente'
         },
@@ -134,7 +134,7 @@ async function updateSyncNotification(EvaluationModel: any) {
             message: message,
             isRead: false,
             updatedAt: new Date(),
-            link: '/secretary/sigenu-sync'
+            link: '/admin/sigenu-sync'
           }
         },
         { upsert: true, new: true }

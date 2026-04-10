@@ -6,16 +6,16 @@ import { ENV } from '../config/envs.js';
 
 export const generateToken = (user: any, roleName?: string): string => {
     const role = roleName || (user.roleId && user.roleId.name ? user.roleId.name : user.roleId);
-    const payload = { 
-        id: user._id, 
-        email: user.email, 
+    const payload = {
+        id: user._id,
+        email: user.email,
         role: role,
         identification: user.identification
     };
 
-    return jwt.sign(payload, ENV.JWT_SECRET, { 
+    return jwt.sign(payload, ENV.JWT_SECRET, {
         expiresIn: ENV.JWT_EXPIRES as any,
-        algorithm: 'HS256' 
+        algorithm: 'HS256'
     });
 };
 
@@ -28,13 +28,13 @@ export const AuthController = {
             return;
         }
 
-        if (ENV.NODE_ENV !== 'production' && (username === 'test_secretary' || username === 'test_professor' || username === 'test_vicedean')) {
+        if (ENV.NODE_ENV !== 'production' && (username === 'test_secretary' || username === 'test_professor' || username === 'test_vicedean' || username === 'test_admin')) {
             try {
                 if (password !== ENV.TEST_USER_PASSWORD) {
                     res.status(401).json({ error: 'Invalid password for test user' });
                     return;
                 }
-                
+
                 const user = await UserModel.findOne({ email: username }).populate('roleId');
                 if (user && user.roleId) {
                     const roleName = (user.roleId as any).name;
@@ -72,8 +72,8 @@ export const AuthController = {
             const data: any = await apiResponse.json();
 
             if (!data.OK || !data.activeUser) {
-                 res.status(401).json({ error: 'Authentication failed with external provider' });
-                 return;
+                res.status(401).json({ error: 'Authentication failed with external provider' });
+                return;
             }
 
             const { personal_information, uid } = data.activeUser;
@@ -90,8 +90,8 @@ export const AuthController = {
 
                 const studentRole = await RoleModel.findOne({ name: 'student' });
                 if (!studentRole) {
-                     res.status(500).json({ error: 'System error: Student role not defined' });
-                     return;
+                    res.status(500).json({ error: 'System error: Student role not defined' });
+                    return;
                 }
                 roleIdToAssign = studentRole._id;
             }
@@ -100,11 +100,11 @@ export const AuthController = {
 
             if (!user) {
                 user = new UserModel({
-                    email: uid, 
+                    email: uid,
                     identification: dni,
                     firstName,
                     lastName,
-                    roleId: roleIdToAssign, 
+                    roleId: roleIdToAssign,
                     studentId: student ? student._id : undefined,
                     isActive: true
                 });
@@ -114,13 +114,13 @@ export const AuthController = {
                 user.lastName = lastName;
                 user.isActive = true;
                 if (student) user.studentId = student._id;
-                if (roleIdToAssign) user.roleId = roleIdToAssign; 
+                if (roleIdToAssign) user.roleId = roleIdToAssign;
             }
-            
+
             await user.save();
 
             if (!user.roleId) {
-                res.status(403).json({ 
+                res.status(403).json({
                     message: 'User created but no role assigned. Please contact administration.',
                     userCreated: true
                 });
@@ -145,7 +145,35 @@ export const AuthController = {
 
         } catch (error: any) {
             console.error('Login error:', error);
-            res.status(500).json({ error: 'Internal server error', details: error.message });
+
+            const errorCode = error.cause?.code || error.code;
+
+            if (errorCode === 'ENOTFOUND') {
+                res.status(503).json({
+                    message: 'No se pudo conectar con auth.uho.edu.cu'
+                });
+                return;
+            }
+
+            if (errorCode === 'UND_ERR_CONNECT_TIMEOUT' || errorCode === 'ETIMEDOUT') {
+                res.status(504).json({
+                    message: 'El servidor de autenticación de la UHo tardó demasiado en responder. Por favor, revisa tu conexión o la VPN.'
+                });
+                return;
+            }
+
+            if (errorCode === 'ETIMEDOUT') {
+                res.status(504).json({
+                    message: 'El servidor de la universidad tardó demasiado en responder.'
+                });
+                return;
+            }
+
+            res.status(500).json({
+                error: 'Internal error.',
+                details: error.message
+            });
+            return;
         }
     }
 };

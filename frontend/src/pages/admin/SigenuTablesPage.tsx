@@ -58,7 +58,7 @@ const SigenuTablesPage: React.FC = () => {
     useEffect(() => {
         const fetchStats = async () => {
             try {
-                const response = await fetch(`${API_BASE}/secretary/sigenu-stats`, {
+                const response = await fetch(`${API_BASE}/admin/sigenu-stats`, {
                     headers: {
                         'Authorization': `Bearer ${token}`
                     }
@@ -128,7 +128,7 @@ const SigenuTablesPage: React.FC = () => {
                 <Box sx={{ mb: 6 }}>
                     <Paper
                         elevation={0}
-                        onClick={() => navigate('/secretary/sigenu-import')}
+                        onClick={() => navigate('/admin/sigenu-import')}
                         sx={{
                             p: 3,
                             display: 'flex',
@@ -178,7 +178,7 @@ const SigenuTablesPage: React.FC = () => {
                         <Grid size={{ xs: 12, sm: 6, md: 4, lg: 3 }} key={item.key}>
                             <Card 
                                 elevation={0}
-                                onClick={() => navigate(`/secretary/sigenu/${item.key}`)}
+                                onClick={() => navigate(`/admin/sigenu/${item.key}`)}
                                 sx={{ 
                                     borderRadius: 2, 
                                     border: '1px solid',

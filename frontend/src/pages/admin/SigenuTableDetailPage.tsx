@@ -28,7 +28,7 @@ interface TableConfig {
 const tableConfigs: Record<string, TableConfig> = {
     careers: {
         title: 'Carreras',
-        apiEndpoint: '/secretary/careers',
+        apiEndpoint: '/admin/careers',
         columns: [
             { field: 'name', headerName: 'Nombre de la Carrera' },
             { field: 'facultyName', headerName: 'Nombre de la Facultad' },
@@ -37,14 +37,14 @@ const tableConfigs: Record<string, TableConfig> = {
     },
     courseTypes: {
         title: 'Tipos de Curso',
-        apiEndpoint: '/secretary/course-types',
+        apiEndpoint: '/admin/course-types',
         columns: [
             { field: 'name', headerName: 'Nombre' }
         ]
     },
     evaluations: {
         title: 'Evaluaciones',
-        apiEndpoint: '/secretary/evaluations',
+        apiEndpoint: '/admin/evaluations',
         columns: [
             { field: 'studentName', headerName: 'Nombre del Estudiante' },
             { field: 'matriculatedSubjectName', headerName: 'Asignatura Matriculada' },
@@ -64,28 +64,28 @@ const tableConfigs: Record<string, TableConfig> = {
     },
     evaluationValues: {
         title: 'Valores de Evaluación',
-        apiEndpoint: '/secretary/evaluation-values',
+        apiEndpoint: '/admin/evaluation-values',
         columns: [
             { field: 'value', headerName: 'Valor' }
         ]
     },
     examinationTypes: {
         title: 'Tipos de Examen',
-        apiEndpoint: '/secretary/examination-types',
+        apiEndpoint: '/admin/examination-types',
         columns: [
             { field: 'name', headerName: 'Nombre' }
         ]
     },
     faculties: {
         title: 'Facultades',
-        apiEndpoint: '/secretary/faculties',
+        apiEndpoint: '/admin/faculties',
         columns: [
             { field: 'name', headerName: 'Nombre de la Facultad' }
         ]
     },
     matriculatedSubjects: {
         title: 'Asignaturas Matriculadas',
-        apiEndpoint: '/secretary/matriculated-subjects',
+        apiEndpoint: '/admin/matriculated-subjects',
         columns: [
             { field: 'studentName', headerName: 'Nombre del Estudiante' },
             { field: 'subjectName', headerName: 'Nombre de la Asignatura' },
@@ -106,7 +106,7 @@ const tableConfigs: Record<string, TableConfig> = {
     },
     students: {
         title: 'Estudiantes',
-        apiEndpoint: '/secretary/students',
+        apiEndpoint: '/admin/students',
         columns: [
             { field: 'firstName', headerName: 'Nombres' },
             { field: 'lastName', headerName: 'Apellidos' },
@@ -120,14 +120,14 @@ const tableConfigs: Record<string, TableConfig> = {
     },
     studentStatuses: {
         title: 'Estados de Estudiante',
-        apiEndpoint: '/secretary/student-statuses',
+        apiEndpoint: '/admin/student-statuses',
         columns: [
             { field: 'kind', headerName: 'Tipo' }
         ]
     },
     subjects: {
         title: 'Asignaturas',
-        apiEndpoint: '/secretary/subjects',
+        apiEndpoint: '/admin/subjects',
         columns: [
             { field: 'name', headerName: 'Nombre de la Asignatura' },
             { field: 'careerName', headerName: 'Carrera' },

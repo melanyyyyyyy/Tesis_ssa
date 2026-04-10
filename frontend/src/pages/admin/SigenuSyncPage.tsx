@@ -105,7 +105,7 @@ const SigenuSyncPage: React.FC = () => {
              <Container maxWidth="xl" sx={{ py: 4 }}>
                 <PageHeader 
                     title="Sincronización de Notas Pendientes"
-                    subtitle="Exportar notas locales modificadas al formato SIGENU (PostgreSQL)."
+                    subtitle="Exportar notas locales modificadas al formato SIGENU."
                     showBackButton={true}
                 />
 

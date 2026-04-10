@@ -11,8 +11,8 @@ import {
 import { Add as AddIcon, Refresh as RefreshIcon, Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material';
 import MainLayout from '../../layouts/MainLayout';
 import PageHeader from '../../components/common/PageHeader';
-import { type Evaluation } from '../../components/secretary/EvaluationsTable';
-import { EvaluationFormDialog } from '../../components/secretary/EvaluationFormDialog';
+import { type Evaluation } from '../../components/admin/EvaluationsTable';
+import { EvaluationFormDialog } from '../../components/admin/EvaluationFormDialog';
 import { ModalDialog } from '../../components/common/ModalDialog';
 import { useAuth } from '../../context/AuthContext';
 import ReusableTable, { type ReusableTableAction, type ReusableTableColumn } from '../../components/common/ReusableTable';
@@ -136,8 +136,8 @@ const EvaluationsToExportPage: React.FC = () => {
                 category: 'FINAL_EVALUATION'
             };
             const url = selectedEvaluation
-                ? `${API_BASE}/secretary/evaluation/${selectedEvaluation._id}`
-                : `${API_BASE}/secretary/evaluation`;
+                ? `${API_BASE}/admin/evaluation/${selectedEvaluation._id}`
+                : `${API_BASE}/admin/evaluation`;
 
             const method = selectedEvaluation ? 'PUT' : 'POST';
 
@@ -173,7 +173,7 @@ const EvaluationsToExportPage: React.FC = () => {
         if (!token) return;
         try {
             setError(null);
-            const response = await fetch(`${API_BASE}/secretary/evaluation/${evaluation._id}`, {
+            const response = await fetch(`${API_BASE}/admin/evaluation/${evaluation._id}`, {
                 method: 'DELETE',
                 headers: {
                     'Authorization': `Bearer ${token}`
@@ -250,7 +250,7 @@ const EvaluationsToExportPage: React.FC = () => {
                 {error && <Alert severity="error" sx={{ mb: 4, borderRadius: 2 }}>{error}</Alert>}
 
                 <ReusableTable<Evaluation>
-                    endpoint="/secretary/pending-grades"
+                    endpoint="/admin/pending-grades"
                     token={token}
                     queryParams={{ category: 'FINAL_EVALUATION' }}
                     columns={columns}

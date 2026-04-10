@@ -284,7 +284,11 @@ const ExaminationCalendar: React.FC<ExaminationCalendarProps> = ({
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${token}`
                 },
-                body: JSON.stringify({ subjectId: subjectToCreate }),
+                body: JSON.stringify(
+                    fixedSubjectId
+                        ? { subjectId: fixedSubjectId }
+                        : {}
+                ),
             });
 
             if (!response.ok) {
@@ -422,7 +426,7 @@ const ExaminationCalendar: React.FC<ExaminationCalendarProps> = ({
                             onSelectSlot={readOnly ? undefined : handleCreateEvent}
                             onSelectEvent={readOnly ? undefined : (selectedEvent) => {
                                 const eventSubjectId = getEntityId(selectedEvent.resource.subjectId);
-                                if (subjectToCreate && eventSubjectId && subjectToCreate !== eventSubjectId) {
+                                if (fixedSubjectId && eventSubjectId && fixedSubjectId !== eventSubjectId) {
                                     setError('No tienes los permisos para borrar este examen porque no pertenece a la asignatura especificada.');
                                     return;
                                 }

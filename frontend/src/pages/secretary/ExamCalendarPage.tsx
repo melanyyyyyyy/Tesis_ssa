@@ -39,39 +39,44 @@ interface CourseTypeOption {
 const ExamCalendarPage: React.FC = () => {
     const theme = useTheme();
     const { token } = useAuth();
-    const [faculties, setFaculties] = useState<FacultyOption[]>([]);
+    const [assignedFaculty, setAssignedFaculty] = useState<FacultyOption | null>(null);
     const [courseTypes, setCourseTypes] = useState<CourseTypeOption[]>([]);
     const [careers, setCareers] = useState<CareerOption[]>([]);
-    const [selectedFacultyId, setSelectedFacultyId] = useState('');
     const [selectedCourseTypeId, setSelectedCourseTypeId] = useState('');
     const [selectedCareerId, setSelectedCareerId] = useState('');
     const [selectedAcademicYear, setSelectedAcademicYear] = useState('');
-    const [loadingFaculties, setLoadingFaculties] = useState(true);
+    const [loadingProfile, setLoadingProfile] = useState(true);
     const [loadingCourseTypes, setLoadingCourseTypes] = useState(false);
     const [loadingCareers, setLoadingCareers] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    const fetchFaculties = useCallback(async () => {
+    const fetchAssignedFaculty = useCallback(async () => {
         if (!token) return;
-        setLoadingFaculties(true);
+        setLoadingProfile(true);
         setError(null);
         try {
-            const response = await fetch(`${API_BASE}/secretary/faculties?limit=200`, {
+            const response = await fetch(`${API_BASE}/secretary/profile`, {
                 headers: {
                     'Authorization': `Bearer ${token}`
                 }
             });
 
+            if (response.status === 404) {
+                setAssignedFaculty(null);
+                setError(null);
+                return;
+            }
+
             if (!response.ok) {
-                throw new Error('No se pudieron cargar las facultades');
+                throw new Error('No se pudo cargar la facultad asignada');
             }
 
             const data = await response.json();
-            setFaculties(data.data || []);
+            setAssignedFaculty(data?.facultyId || null);
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Error desconocido');
         } finally {
-            setLoadingFaculties(false);
+            setLoadingProfile(false);
         }
     }, [token]);
 
@@ -143,25 +148,30 @@ const ExamCalendarPage: React.FC = () => {
     }, [token]);
 
     useEffect(() => {
-        void fetchFaculties();
-    }, [fetchFaculties]);
+        void fetchAssignedFaculty();
+    }, [fetchAssignedFaculty]);
 
-    const handleFacultyChange = (event: SelectChangeEvent<string>) => {
-        const facultyId = event.target.value;
-        setSelectedFacultyId(facultyId);
-        setSelectedCourseTypeId('');
-        setSelectedCareerId('');
-        setSelectedAcademicYear('');
-        setCareers([]);
-        void fetchCourseTypes(facultyId);
-    };
+    useEffect(() => {
+        if (!assignedFaculty?._id) {
+            setCourseTypes([]);
+            setCareers([]);
+            setSelectedCourseTypeId('');
+            setSelectedCareerId('');
+            setSelectedAcademicYear('');
+            return;
+        }
+        void fetchCourseTypes(assignedFaculty._id);
+    }, [assignedFaculty?._id, fetchCourseTypes]);
 
     const handleCourseTypeChange = (event: SelectChangeEvent<string>) => {
         const courseTypeId = event.target.value;
         setSelectedCourseTypeId(courseTypeId);
         setSelectedCareerId('');
         setSelectedAcademicYear('');
-        void fetchCareers(selectedFacultyId, courseTypeId);
+        setCareers([]);
+        if (assignedFaculty?._id) {
+            void fetchCareers(assignedFaculty._id, courseTypeId);
+        }
     };
 
     const handleCareerChange = (event: SelectChangeEvent<string>) => {
@@ -178,7 +188,10 @@ const ExamCalendarPage: React.FC = () => {
             <Container maxWidth="xl" sx={{ py: 4 }}>
                 <PageHeader
                     title="Calendario de Exámenes"
-                    subtitle="Visualiza, programa o elimina las convocatorias de exámenes del curso académico."
+                    subtitle={assignedFaculty?.name
+                        ? `Visualiza, programa o elimina las convocatorias de exámenes para ${assignedFaculty.name}.`
+                        : 'Visualiza, programa o elimina las convocatorias de exámenes del curso académico.'
+                    }
                     showBackButton={true}
                 />
 
@@ -194,23 +207,7 @@ const ExamCalendarPage: React.FC = () => {
                         Filtros
                     </Typography>
                     <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mb: 3 }}>
-                        <FormControl fullWidth disabled={loadingFaculties}>
-                            <InputLabel id="faculty-select-label">Facultad</InputLabel>
-                            <Select
-                                labelId="faculty-select-label"
-                                value={selectedFacultyId}
-                                label="Facultad"
-                                onChange={handleFacultyChange}
-                            >
-                                {faculties.map((faculty) => (
-                                    <MenuItem key={faculty._id} value={faculty._id}>
-                                        {faculty.name}
-                                    </MenuItem>
-                                ))}
-                            </Select>
-                        </FormControl>
-
-                        <FormControl fullWidth disabled={!selectedFacultyId || loadingCourseTypes}>
+                        <FormControl fullWidth disabled={!assignedFaculty?._id || loadingCourseTypes}>
                             <InputLabel id="course-type-select-label">Tipo de Curso</InputLabel>
                             <Select
                                 labelId="course-type-select-label"
@@ -226,7 +223,7 @@ const ExamCalendarPage: React.FC = () => {
                             </Select>
                         </FormControl>
 
-                        <FormControl fullWidth disabled={!selectedCourseTypeId || loadingCareers}>
+                        <FormControl fullWidth disabled={!assignedFaculty?._id || !selectedCourseTypeId || loadingCareers}>
                             <InputLabel id="career-select-label">Carrera</InputLabel>
                             <Select
                                 labelId="career-select-label"
@@ -242,7 +239,7 @@ const ExamCalendarPage: React.FC = () => {
                             </Select>
                         </FormControl>
 
-                        <FormControl fullWidth disabled={!selectedCareerId}>
+                        <FormControl fullWidth disabled={!assignedFaculty?._id || !selectedCareerId}>
                             <InputLabel id="academic-year-select-label">Año Académico</InputLabel>
                             <Select
                                 labelId="academic-year-select-label"
@@ -260,7 +257,7 @@ const ExamCalendarPage: React.FC = () => {
                         </FormControl>
                     </Stack>
 
-                    {loadingFaculties && (
+                    {loadingProfile && (
                         <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
                             <CircularProgress />
                         </Box>
@@ -268,13 +265,19 @@ const ExamCalendarPage: React.FC = () => {
 
                     {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
-                    {!loadingFaculties && (!selectedCareerId || !selectedAcademicYear) && (
-                        <Alert severity="info">
-                            Selecciona una facultad, un tipo de curso, una carrera y un año académico para visualizar y gestionar el calendario de exámenes.
+                    {!loadingProfile && !assignedFaculty?._id && (
+                        <Alert severity="info" sx={{ mb: 2 }}>
+                            No tienes una facultad asignada en este momento. Contacta al administrador para habilitar esta vista.
                         </Alert>
                     )}
 
-                    {!loadingFaculties && selectedCareerId && selectedAcademicYear && (
+                    {!loadingProfile && assignedFaculty?._id && (!selectedCareerId || !selectedAcademicYear) && (
+                        <Alert severity="info">
+                            Selecciona un tipo de curso, una carrera y un año académico para visualizar y gestionar el calendario de exámenes.
+                        </Alert>
+                    )}
+
+                    {!loadingProfile && assignedFaculty?._id && selectedCareerId && selectedAcademicYear && (
                         <ExaminationCalendar
                             carrera={selectedCareerId}
                             academicYear={Number(selectedAcademicYear)}

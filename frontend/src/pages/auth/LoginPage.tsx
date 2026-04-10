@@ -62,7 +62,7 @@ const LoginPage: React.FC = () => {
                 if (response.status === 403 && data.userCreated) {
                     throw new Error(data.message || 'Usuario registrado pero sin rol asignado. Contacte al administrador.');
                 }
-                throw new Error(data.error || 'Error al iniciar sesión');
+                throw new Error(data.message || 'Error al iniciar sesión');
             }
 
             login(data.token, data.user);
@@ -73,6 +73,8 @@ const LoginPage: React.FC = () => {
                 handleNavigate('/professor/dashboard', data);
             } else if (data.user.role === 'vicedean') {
                 handleNavigate('/vicedean/dashboard', data);
+            } else if (data.user.role === 'admin') {
+                handleNavigate('/admin/dashboard', data);
             }
             else {
                 handleNavigate('/', data);

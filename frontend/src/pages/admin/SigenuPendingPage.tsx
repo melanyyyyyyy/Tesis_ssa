@@ -37,7 +37,7 @@ const SigenuPendingPage: React.FC = () => {
     useEffect(() => {
         const fetchPendingCount = async () => {
             try {
-                const response = await fetch(`${API_BASE}/secretary/pending-grades-count`, {
+                const response = await fetch(`${API_BASE}/admin/pending-grades-count`, {
                     headers: {
                         'Authorization': `Bearer ${token}`
                     }
@@ -103,7 +103,7 @@ const SigenuPendingPage: React.FC = () => {
                 <Box sx={{ mb: 6 }}>
                     <Paper
                         elevation={0}
-                        onClick={() => navigate('/secretary/sigenu-sync')}
+                        onClick={() => navigate('/admin/sigenu-sync')}
                         sx={{
                             p: 3,
                             display: 'flex',
@@ -152,7 +152,7 @@ const SigenuPendingPage: React.FC = () => {
                     <Grid size={{ xs: 12, sm: 6, md: 4, lg: 3 }}>
                         <Card 
                             elevation={0}
-                            onClick={() => navigate('/secretary/sigenu-pending/export')}
+                            onClick={() => navigate('/admin/sigenu-pending/export')}
                             sx={{ 
                                 cursor: 'pointer',
                                 borderRadius: 2, 
@@ -197,7 +197,7 @@ const SigenuPendingPage: React.FC = () => {
                     <Grid size={{ xs: 12, sm: 6, md: 4, lg: 3 }}>
                         <Card 
                             elevation={0}
-                            onClick={() => navigate('/secretary/sigenu-pending/last-export')}
+                            onClick={() => navigate('/admin/sigenu-pending/last-export')}
                             sx={{ 
                                 cursor: 'pointer',
                                 borderRadius: 2, 

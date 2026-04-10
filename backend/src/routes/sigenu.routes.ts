@@ -14,7 +14,7 @@ const router = Router();
 const upload = multer({ dest: 'storage/temp/' });
 
 router.use(authMiddleware);
-router.use(authorize(['secretary']));
+router.use(authorize(['admin']));
 
 router.post("/import/upload-chunk", upload.single('chunk'), uploadChunk);
 router.post("/import/merge", mergeChunks);

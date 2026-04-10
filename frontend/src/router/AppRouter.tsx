@@ -2,15 +2,19 @@ import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom
 import { useAuth } from '../context/AuthContext';
 import CircularProgress from '@mui/material/CircularProgress';
 import LoginPage from '../pages/auth/LoginPage';
+
 import SecretaryDashboard from '../pages/secretary/SecretaryDashboard';
-import SigenuImportPage from '../pages/secretary/SigenuImportPage';
-import SigenuSyncPage from '../pages/secretary/SigenuSyncPage';
-import SigenuTablesPage from '../pages/secretary/SigenuTablesPage';
-import SigenuTableDetailPage from '../pages/secretary/SigenuTableDetailPage';
-import SigenuPendingPage from '../pages/secretary/SigenuPendingPage';
-import EvaluationsToExportPage from '../pages/secretary/EvaluationsToExportPage';
-import LastExportPage from '../pages/secretary/LastExportPage';
 import ExamCalendarPage from '../pages/secretary/ExamCalendarPage';
+
+import AdminDashboard from '../pages/admin/AdminDashboard';
+import SigenuImportPage from '../pages/admin/SigenuImportPage';
+import SigenuSyncPage from '../pages/admin/SigenuSyncPage';
+import SigenuTablesPage from '../pages/admin/SigenuTablesPage';
+import SigenuTableDetailPage from '../pages/admin/SigenuTableDetailPage';
+import SigenuPendingPage from '../pages/admin/SigenuPendingPage';
+import EvaluationsToExportPage from '../pages/admin/EvaluationsToExportPage';
+import LastExportPage from '../pages/admin/LastExportPage';
+
 import ProfessorExamCalendarPage from '../pages/professor/ExamCalendarPage';
 import RegisterAttendancePage from '../pages/professor/RegisterAttendancePage';
 import RegisterEvaluationPage from '../pages/professor/RegisterEvaluationPage';
@@ -20,17 +24,19 @@ import RecordsAttendanceEdit from '../pages/professor/RecordsAttendanceEdit';
 import RecordsAttendanceView from '../pages/professor/RecordsAttendanceView';
 import RecordsEvaluationEdit from '../pages/professor/RecordsEvaluationEdit';
 import RecordsEvaluationView from '../pages/professor/RecordsEvaluationView';
-import ProfilePage from '../pages/common/ProfilePage';
-import NotificationPage from '../pages/common/NotificationPage';
 import ProfessorDashboard from '../pages/professor/ProfessorDashboard';
 import SubjectDetail from '../pages/professor/SubjectDetail';
 import StudentDetail from '../pages/professor/StudentDetail';
 import ChatPage from '../pages/professor/Chat';
+
+import ProfilePage from '../pages/common/ProfilePage';
+import NotificationPage from '../pages/common/NotificationPage';
+
 import VicedeanDashboard from '../pages/vicedean/VicedeanDashboard';
 import TeachingAssignmentsPage from '../pages/vicedean/TeachingAssignmentsPage';
 
 const ProtectedRoute = ({ allowedRoles }: { allowedRoles?: string[] }) => {
-  const { isAuthenticated, isLoading, user } = useAuth(); 
+  const { isAuthenticated, isLoading, user } = useAuth();
 
   if (isLoading) {
     return <CircularProgress color="secondary" />;
@@ -64,17 +70,23 @@ export default function AppRouter() {
           <Route path="/notifications" element={<NotificationPage />} />
         </Route>
 
+        {/* Admin Routes */}
+        <Route element={<ProtectedRoute allowedRoles={['admin']} />}>
+          <Route path="/" element={<Navigate to="/admin/dashboard" replace />} />
+          <Route path="/admin/dashboard" element={<AdminDashboard />} />
+          <Route path="/admin/sigenu-tables" element={<SigenuTablesPage />} />
+          <Route path="/admin/sigenu/:tableType" element={<SigenuTableDetailPage />} />
+          <Route path="/admin/sigenu-import" element={<SigenuImportPage />} />
+          <Route path="/admin/sigenu-sync" element={<SigenuSyncPage />} />
+          <Route path="/admin/sigenu-pending" element={<SigenuPendingPage />} />
+          <Route path="/admin/sigenu-pending/export" element={<EvaluationsToExportPage />} />
+          <Route path="/admin/sigenu-pending/last-export" element={<LastExportPage />} />
+        </Route>
+
         {/* Secretary Routes */}
         <Route element={<ProtectedRoute allowedRoles={['secretary']} />}>
           <Route path="/" element={<Navigate to="/secretary/dashboard" replace />} />
           <Route path="/secretary/dashboard" element={<SecretaryDashboard />} />
-          <Route path="/secretary/sigenu-tables" element={<SigenuTablesPage />} />
-          <Route path="/secretary/sigenu/:tableType" element={<SigenuTableDetailPage />} />
-          <Route path="/secretary/sigenu-import" element={<SigenuImportPage />} />
-          <Route path="/secretary/sigenu-sync" element={<SigenuSyncPage />} />
-          <Route path="/secretary/sigenu-pending" element={<SigenuPendingPage />} />
-          <Route path="/secretary/sigenu-pending/export" element={<EvaluationsToExportPage />} />
-          <Route path="/secretary/sigenu-pending/last-export" element={<LastExportPage />} />
           <Route path="/secretary/exams" element={<ExamCalendarPage />} />
         </Route>
 
@@ -97,10 +109,10 @@ export default function AppRouter() {
         </Route>
 
         {/* Vicedean Routes */}
-         <Route element={<ProtectedRoute allowedRoles={['vicedean']} />}>
+        <Route element={<ProtectedRoute allowedRoles={['vicedean']} />}>
           <Route path="/vicedean/dashboard" element={<VicedeanDashboard />} />
           <Route path="/vicedean/teaching-assignments" element={<TeachingAssignmentsPage />} />
-         </Route>
+        </Route>
 
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>

@@ -137,9 +137,9 @@ export const EvaluationFormDialog: React.FC<EvaluationFormDialogProps> = ({
             const headers = { 'Authorization': `Bearer ${token}` };
             
             const [facultiesRes, valuesRes, typesRes] = await Promise.all([
-                fetch(`${API_BASE}/secretary/faculties`, { headers }),
-                fetch(`${API_BASE}/secretary/evaluation-values`, { headers }),
-                fetch(`${API_BASE}/secretary/examination-types`, { headers })
+                fetch(`${API_BASE}/admin/faculties`, { headers }),
+                fetch(`${API_BASE}/admin/evaluation-values`, { headers }),
+                fetch(`${API_BASE}/admin/examination-types`, { headers })
             ]);
 
             if (facultiesRes.ok) {
@@ -185,7 +185,7 @@ export const EvaluationFormDialog: React.FC<EvaluationFormDialogProps> = ({
             return;
         }
         try {
-            let url = `${API_BASE}/secretary/careers?facultyId=${facultyId}`;
+            let url = `${API_BASE}/admin/careers?facultyId=${facultyId}`;
             if (courseTypeId) {
                 url += `&courseTypeId=${courseTypeId}`;
             }
@@ -208,7 +208,7 @@ export const EvaluationFormDialog: React.FC<EvaluationFormDialogProps> = ({
             return;
         }
         try {
-            const res = await fetch(`${API_BASE}/secretary/course-types?facultyId=${facultyId}`, {
+            const res = await fetch(`${API_BASE}/admin/course-types?facultyId=${facultyId}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (res.ok) {
@@ -232,7 +232,7 @@ export const EvaluationFormDialog: React.FC<EvaluationFormDialogProps> = ({
                 careerId,
                 academicYear: year
             });
-            const res = await fetch(`${API_BASE}/secretary/students?${params}`, {
+            const res = await fetch(`${API_BASE}/admin/students?${params}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (res.ok) {
@@ -251,7 +251,7 @@ export const EvaluationFormDialog: React.FC<EvaluationFormDialogProps> = ({
             return;
         }
         try {
-            const res = await fetch(`${API_BASE}/secretary/matriculated-subjects?studentId=${studentId}`, {
+            const res = await fetch(`${API_BASE}/admin/matriculated-subjects?studentId=${studentId}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (res.ok) {

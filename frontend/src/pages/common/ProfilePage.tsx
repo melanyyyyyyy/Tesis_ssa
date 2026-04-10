@@ -12,7 +12,14 @@ import {
     Container,
     useTheme
 } from '@mui/material';
-import { Person as PersonIcon, Email as EmailIcon, Badge as BadgeIcon, CheckCircle as CheckCircleIcon, Cancel as CancelIcon } from '@mui/icons-material';
+import { 
+    Person as PersonIcon, 
+    Email as EmailIcon, 
+    Badge as BadgeIcon, 
+    CheckCircle as CheckCircleIcon, 
+    Cancel as CancelIcon,
+    Business as BusinessIcon
+} from '@mui/icons-material';
 import PageHeader from '../../components/common/PageHeader';
 import MainLayout from '../../layouts/MainLayout';
 
@@ -47,6 +54,13 @@ interface UserProfile {
     createdAt?: string | Date;
 }
 
+interface RoleFacultyResponse {
+    facultyId?: {
+        _id?: string;
+        name?: string;
+    } | null;
+}
+
 const getRoleName = (role: string) => {
     const roles: { [key: string]: string } = {
         'admin': 'Administrador',
@@ -61,6 +75,7 @@ const getRoleName = (role: string) => {
 const ProfilePage: React.FC = () => {
     const theme = useTheme();
     const [profile, setProfile] = useState<UserProfile | null>(null);
+    const [facultyName, setFacultyName] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
@@ -93,9 +108,31 @@ const ProfilePage: React.FC = () => {
             const data = await response.json();
             console.log('Profile data received:', data);
             setProfile(data);
+
+            const roleName = data?.role?.name;
+            if (roleName === 'secretary' || roleName === 'vicedean') {
+                const endpoint = roleName === 'secretary' ? 'secretary/profile' : 'vicedean/profile';
+                const facultyResponse = await fetch(`${API_BASE}/${endpoint}`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (facultyResponse.ok) {
+                    const facultyData = await facultyResponse.json() as RoleFacultyResponse;
+                    setFacultyName(facultyData?.facultyId?.name || 'Sin facultad asignada');
+                } else if (facultyResponse.status === 404) {
+                    setFacultyName('Sin facultad asignada');
+                } else {
+                    setFacultyName('Sin facultad asignada');
+                }
+            } else {
+                setFacultyName(null);
+            }
         } catch (err) {
             console.error('Profile fetch error:', err);
-            setError(err instanceof Error ? err.message : 'Uknowed error');
+            setError(err instanceof Error ? err.message : 'Error desconocido');
         } finally {
             setLoading(false);
         }
@@ -168,107 +205,187 @@ const ProfilePage: React.FC = () => {
 
                         <Divider sx={{ my: 3 }} />
 
-                            <Box 
+                        <Box 
                             sx={{ 
-                                display: 'grid', 
-                                gridTemplateColumns: { xs: '1fr', md: 'repeat(3, 1fr)' }, 
-                                gap: 3,
-                                placeItems: 'center', 
+                                display: 'flex', 
+                                flexWrap: 'wrap', 
+                                gap: 2,
+                                justifyContent: 'center',
+                                alignItems: 'stretch'
                             }}
-                            >
-                            <Box>
-                                <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                                    <EmailIcon sx={{ mr: 2, color: 'text.secondary' }} />
-                                    <Box>
-                                        <Typography variant="subtitle2" color="text.secondary">
-                                            Correo Electrónico
-                                        </Typography>
-                                        <Typography variant="body1">{`${profile.email}@uho.edu.cu`}</Typography>
-                                    </Box>
+                        >
+                            <Box sx={{ 
+                                display: 'flex', 
+                                alignItems: 'center', 
+                                p: 2, 
+                                borderRadius: 2, 
+                                border: '1px solid',
+                                borderColor: 'divider',
+                                bgcolor: 'background.default',
+                                flex: '1 1 250px',
+                                maxWidth: '350px'
+                            }}>
+                                <EmailIcon sx={{ mr: 2, color: 'primary.main' }} />
+                                <Box sx={{ textAlign: 'left' }}>
+                                    <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 'bold' }}>
+                                        Correo Electrónico
+                                    </Typography>
+                                    <Typography variant="body1" fontWeight="medium">{`${profile.email}@uho.edu.cu`}</Typography>
                                 </Box>
                             </Box>
 
-                            <Box>
-                                <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                                    <BadgeIcon sx={{ mr: 2, color: 'text.secondary' }} />
-                                    <Box>
-                                        <Typography variant="subtitle2" color="text.secondary">
-                                            Identificación
-                                        </Typography>
-                                        <Typography variant="body1">{profile.identification}</Typography>
-                                    </Box>
+                            <Box sx={{ 
+                                display: 'flex', 
+                                alignItems: 'center', 
+                                p: 2, 
+                                borderRadius: 2, 
+                                border: '1px solid',
+                                borderColor: 'divider',
+                                bgcolor: 'background.default',
+                                flex: '1 1 250px',
+                                maxWidth: '350px'
+                            }}>
+                                <BadgeIcon sx={{ mr: 2, color: 'primary.main' }} />
+                                <Box sx={{ textAlign: 'left' }}>
+                                    <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 'bold' }}>
+                                        Identificación
+                                    </Typography>
+                                    <Typography variant="body1" fontWeight="medium">{profile.identification}</Typography>
                                 </Box>
                             </Box>
 
-                            <Box>
-                                <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                                    {profile.isActive ? (
-                                        <CheckCircleIcon sx={{ mr: 2, color: 'success.main' }} />
-                                    ) : (
-                                        <CancelIcon sx={{ mr: 2, color: 'error.main' }} />
-                                    )}
-                                    <Box>
-                                        <Typography variant="subtitle2" color="text.secondary">
-                                            Estado
+                            {(profile.role?.name === 'secretary' || profile.role?.name === 'vicedean') && (
+                                <Box sx={{ 
+                                    display: 'flex', 
+                                    alignItems: 'center', 
+                                    p: 2, 
+                                    borderRadius: 2, 
+                                    border: '1px solid',
+                                    borderColor: 'divider',
+                                    bgcolor: 'background.default',
+                                    flex: '1 1 250px',
+                                    maxWidth: '350px'
+                                }}>
+                                    <BusinessIcon sx={{ mr: 2, color: 'primary.main' }} />
+                                    <Box sx={{ textAlign: 'left' }}>
+                                        <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 'bold' }}>
+                                            Facultad
                                         </Typography>
-                                        <Typography variant="body1">
-                                            {profile.isActive ? 'Usuario activo' : 'Usuario inactivo'}
-                                        </Typography>
+                                        <Typography variant="body1" fontWeight="medium">{facultyName || 'Sin facultad asignada'}</Typography>
                                     </Box>
+                                </Box>
+                            )}
+
+                            <Box sx={{ 
+                                display: 'flex', 
+                                alignItems: 'center', 
+                                p: 2, 
+                                borderRadius: 2, 
+                                border: '1px solid',
+                                borderColor: 'divider',
+                                bgcolor: 'background.default',
+                                flex: '1 1 250px',
+                                maxWidth: '350px'
+                            }}>
+                                {profile.isActive ? (
+                                    <CheckCircleIcon sx={{ mr: 2, color: 'success.main' }} />
+                                ) : (
+                                    <CancelIcon sx={{ mr: 2, color: 'error.main' }} />
+                                )}
+                                <Box sx={{ textAlign: 'left' }}>
+                                    <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 'bold' }}>
+                                        Estado
+                                    </Typography>
+                                    <Typography variant="body1" fontWeight="medium">
+                                        {profile.isActive ? 'Usuario activo' : 'Usuario inactivo'}
+                                    </Typography>
                                 </Box>
                             </Box>
                         </Box>
 
                         {profile.student && (
                             <>
-                                <Divider sx={{ my: 3 }} />
-                                <Typography variant="h6" gutterBottom sx={{ mb: 3 }}>
+                                <Divider sx={{ my: 4 }} />
+                                <Typography variant="h6" gutterBottom sx={{ mb: 3, textAlign: 'center', fontWeight: 'bold' }}>
                                     Información Académica
                                 </Typography>
 
-                                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 3 }}>
-                                    <Box>
-                                        <Box sx={{ mb: 2 }}>
-                                            <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                                                Año Académico
-                                            </Typography>
-                                            <Typography variant="body1">{profile.student.academicYear}º año</Typography>
-                                        </Box>
+                                <Box sx={{ 
+                                    display: 'flex', 
+                                    flexWrap: 'wrap', 
+                                    gap: 2,
+                                    justifyContent: 'center'
+                                }}>
+                                    <Box sx={{ 
+                                        p: 2, 
+                                        borderRadius: 2, 
+                                        border: '1px solid',
+                                        borderColor: 'divider',
+                                        bgcolor: 'background.default',
+                                        flex: '1 1 200px',
+                                        maxWidth: '300px',
+                                        textAlign: 'left'
+                                    }}>
+                                        <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 'bold' }}>
+                                            Año Académico
+                                        </Typography>
+                                        <Typography variant="body1" fontWeight="medium">{profile.student.academicYear}º año</Typography>
                                     </Box>
 
-                                    <Box>
-                                        <Box sx={{ mb: 2 }}>
-                                            <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                                                Carrera
-                                            </Typography>
-                                            <Typography variant="body1">
-                                                {profile.student.career?.name || 'Sin carrera asignada'}
-                                            </Typography>
-                                        </Box>
+                                    <Box sx={{ 
+                                        p: 2, 
+                                        borderRadius: 2, 
+                                        border: '1px solid',
+                                        borderColor: 'divider',
+                                        bgcolor: 'background.default',
+                                        flex: '1 1 200px',
+                                        maxWidth: '300px',
+                                        textAlign: 'left'
+                                    }}>
+                                        <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 'bold' }}>
+                                            Carrera
+                                        </Typography>
+                                        <Typography variant="body1" fontWeight="medium">
+                                            {profile.student.career?.name || 'Sin carrera asignada'}
+                                        </Typography>
                                     </Box>
 
-                                    <Box>
-                                        <Box sx={{ mb: 2 }}>
-                                            <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                                                Tipo de Curso
-                                            </Typography>
-                                            <Typography variant="body1">
-                                                {profile.student.courseType?.name || 'Sin tipo asignado'}
-                                            </Typography>
-                                        </Box>
+                                    <Box sx={{ 
+                                        p: 2, 
+                                        borderRadius: 2, 
+                                        border: '1px solid',
+                                        borderColor: 'divider',
+                                        bgcolor: 'background.default',
+                                        flex: '1 1 200px',
+                                        maxWidth: '300px',
+                                        textAlign: 'left'
+                                    }}>
+                                        <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 'bold' }}>
+                                            Tipo de Curso
+                                        </Typography>
+                                        <Typography variant="body1" fontWeight="medium">
+                                            {profile.student.courseType?.name || 'Sin tipo asignado'}
+                                        </Typography>
                                     </Box>
 
-                                    <Box sx={{ gridColumn: { xs: '1', md: '1 / -1' } }}>
-                                        <Box sx={{ mb: 2 }}>
-                                            <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                                                Estado del Estudiante
-                                            </Typography>
-                                            <Chip
-                                                label={profile.student.studentStatus?.kind || 'Sin estado'}
-                                                color="info"
-                                                variant="outlined"
-                                            />
-                                        </Box>
+                                    <Box sx={{ 
+                                        p: 2, 
+                                        borderRadius: 2, 
+                                        border: '1px solid',
+                                        borderColor: 'divider',
+                                        bgcolor: 'background.default',
+                                        flex: '1 1 200px',
+                                        maxWidth: '300px',
+                                        textAlign: 'left'
+                                    }}>
+                                        <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 'bold', mb: 1, display: 'block' }}>
+                                            Estado Académico
+                                        </Typography>
+                                        <Chip
+                                            label={profile.student.studentStatus?.kind || 'Sin estado'}
+                                            color="info"
+                                            size="small"
+                                        />
                                     </Box>
                                 </Box>
                             </>
