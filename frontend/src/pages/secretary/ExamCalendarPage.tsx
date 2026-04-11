@@ -215,11 +215,15 @@ const ExamCalendarPage: React.FC = () => {
                                 label="Tipo de Curso"
                                 onChange={handleCourseTypeChange}
                             >
-                                {courseTypes.map((courseType) => (
+                                {courseTypes.length > 0 ? courseTypes.map((courseType) => (
                                     <MenuItem key={courseType._id} value={courseType._id}>
                                         {courseType.name}
                                     </MenuItem>
-                                ))}
+                                )) : (
+                                    <MenuItem disabled>
+                                        No hay opciones para mostrar
+                                    </MenuItem>
+                                )}
                             </Select>
                         </FormControl>
 
@@ -231,11 +235,15 @@ const ExamCalendarPage: React.FC = () => {
                                 label="Carrera"
                                 onChange={handleCareerChange}
                             >
-                                {careers.map((career) => (
+                                {careers.length > 0 ? careers.map((career) => (
                                     <MenuItem key={career._id} value={career._id}>
                                         {career.name}
                                     </MenuItem>
-                                ))}
+                                )) : (
+                                    <MenuItem disabled>
+                                        No hay opciones para mostrar
+                                    </MenuItem>
+                                )}
                             </Select>
                         </FormControl>
 

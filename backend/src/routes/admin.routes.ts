@@ -4,6 +4,10 @@ import {
     getPendingGradesCount, 
     getPendingGradesList, 
     getLastExportGradesList,
+    getFacultyAssignmentUsers,
+    getRoleManagementUsers,
+    updateFacultyAssignmentUser,
+    updateRoleManagementUser,
     deleteEvaluation,
     createEvaluation,
     updateEvaluation,
@@ -26,6 +30,10 @@ router.use(authMiddleware);
 router.use(authorize(['admin']));
 
 router.get('/sigenu-stats', getDashboardStats);
+router.get('/faculty-assignment-users', getFacultyAssignmentUsers);
+router.put('/faculty-assignment-users/:id', updateFacultyAssignmentUser);
+router.get('/role-management-users', getRoleManagementUsers);
+router.put('/role-management-users/:id', updateRoleManagementUser);
 router.get('/pending-grades-count', getPendingGradesCount);
 router.get('/pending-grades', getPendingGradesList);
 router.get('/last-export-grades', getLastExportGradesList);

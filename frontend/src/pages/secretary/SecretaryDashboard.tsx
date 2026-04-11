@@ -63,14 +63,14 @@ const SecretaryDashboard: React.FC = () => {
             description: 'Visualizar los datos de la facultad y exportar tablas en formato PDF.',
             icon: <PictureAsPdfIcon />,
             path: '/secretary/sigenu-tables',  /////
-            color: theme.palette.primary.main
+            color: theme.palette.secondary.main
         },
         {
             title: 'Calendario de Exámenes',
             description: 'Planificar y organizar las fechas y horarios de exámenes.',
             icon: <CalendarIcon />,
             path: '/secretary/exams',
-            color: theme.palette.secondary.main
+            color: theme.palette.primary.main
         }
     ];
 

@@ -11,7 +11,13 @@ import {
     StudentStatusModel,
     SubjectModel
 } from '../models/sigenu/index.js';
-import { EvaluationScoreModel } from '../models/system/index.js';
+import {
+    EvaluationScoreModel,
+    RoleModel,
+    SecretaryModel,
+    UserModel,
+    VicedeanModel
+} from '../models/system/index.js';
 import { SyncService } from '../services/sync.service.js';
 
 export const getDashboardStats = async (req: Request, res: Response) => {
@@ -35,6 +41,377 @@ export const getDashboardStats = async (req: Request, res: Response) => {
         res.status(500).json({ message: 'Error fetching stats' });
     }
 };
+
+export async function getRoleManagementUsers(req: Request, res: Response) {
+    try {
+        const statusParam = typeof req.query.status === 'string' ? req.query.status : 'all';
+        const status = ['pending', 'assigned', 'all'].includes(statusParam) ? statusParam : 'all';
+        const allowedRoleNames = ['admin', 'secretary', 'vicedean', 'professor'];
+
+        const allowedRoles = await RoleModel.find({ name: { $in: allowedRoleNames } })
+            .select('_id name')
+            .lean();
+
+        const allowedRoleIds = allowedRoles.map((role) => role._id);
+        const filter =
+            status === 'pending'
+                ? { roleId: null }
+                : status === 'assigned'
+                    ? { roleId: { $in: allowedRoleIds } }
+                    : {
+                        $or: [
+                            { roleId: null },
+                            { roleId: { $in: allowedRoleIds } }
+                        ]
+                    };
+
+        const users = await UserModel.find(filter)
+            .populate('roleId', 'name')
+            .sort({ firstName: 1, lastName: 1 })
+            .lean();
+
+        const userIds = users.map((user) => user._id);
+        const [secretaryAssignments, vicedeanAssignments] = await Promise.all([
+            SecretaryModel.find({ userId: { $in: userIds } })
+                .populate('facultyId', 'name')
+                .lean(),
+            VicedeanModel.find({ userId: { $in: userIds } })
+                .populate('facultyId', 'name')
+                .lean()
+        ]);
+
+        const secretaryAssignmentsMap = new Map(
+            secretaryAssignments.map((assignment) => [String(assignment.userId), assignment])
+        );
+        const vicedeanAssignmentsMap = new Map(
+            vicedeanAssignments.map((assignment) => [String(assignment.userId), assignment])
+        );
+
+        const data = users.map((user) => {
+            const role = user.roleId as { name?: string } | null;
+            const secretaryAssignment = secretaryAssignmentsMap.get(String(user._id));
+            const vicedeanAssignment = vicedeanAssignmentsMap.get(String(user._id));
+            const assignedFaculty =
+                role?.name === 'secretary'
+                    ? secretaryAssignment?.facultyId as { _id?: string; name?: string } | undefined
+                    : role?.name === 'vicedean'
+                        ? vicedeanAssignment?.facultyId as { _id?: string; name?: string } | undefined
+                        : undefined;
+
+            return {
+                _id: user._id,
+                firstName: user.firstName,
+                lastName: user.lastName,
+                fullName: `${user.firstName} ${user.lastName}`.trim(),
+                email: user.email || '',
+                role: role?.name || null,
+                faculty: assignedFaculty
+                    ? {
+                        _id: String(assignedFaculty._id || ''),
+                        name: assignedFaculty.name || ''
+                    }
+                    : null
+            };
+        });
+
+        return res.status(200).json({
+            data,
+            totalCount: data.length,
+            status
+        });
+    } catch (error: any) {
+        console.error('Error in getRoleManagementUsers:', error);
+        return res.status(500).json({
+            success: false,
+            error: error.message || 'Failed to get role management users.'
+        });
+    }
+}
+
+export async function getFacultyAssignmentUsers(req: Request, res: Response) {
+    try {
+        const tabParam = typeof req.query.tab === 'string' ? req.query.tab : 'all';
+        const tab = ['secretaries', 'vicedeans', 'all'].includes(tabParam) ? tabParam : 'all';
+        const allowedRoleNames = ['secretary', 'vicedean'];
+
+        const allowedRoles = await RoleModel.find({ name: { $in: allowedRoleNames } })
+            .select('_id name')
+            .lean();
+
+        const roleIdByName = new Map(
+            allowedRoles.map((role) => [role.name, role._id])
+        );
+        const filter =
+            tab === 'secretaries'
+                ? { roleId: roleIdByName.get('secretary') }
+                : tab === 'vicedeans'
+                    ? { roleId: roleIdByName.get('vicedean') }
+                    : { roleId: { $in: allowedRoles.map((role) => role._id) } };
+
+        const users = await UserModel.find(filter)
+            .populate('roleId', 'name')
+            .sort({ firstName: 1, lastName: 1 })
+            .lean();
+
+        const userIds = users.map((user) => user._id);
+        const [secretaryAssignments, vicedeanAssignments] = await Promise.all([
+            SecretaryModel.find({ userId: { $in: userIds } })
+                .populate('facultyId', 'name')
+                .lean(),
+            VicedeanModel.find({ userId: { $in: userIds } })
+                .populate('facultyId', 'name')
+                .lean()
+        ]);
+
+        const secretaryAssignmentsMap = new Map(
+            secretaryAssignments.map((assignment) => [String(assignment.userId), assignment])
+        );
+        const vicedeanAssignmentsMap = new Map(
+            vicedeanAssignments.map((assignment) => [String(assignment.userId), assignment])
+        );
+
+        const data = users.map((user) => {
+            const role = user.roleId as { name?: string } | null;
+            const assignedFaculty =
+                role?.name === 'secretary'
+                    ? secretaryAssignmentsMap.get(String(user._id))?.facultyId as { _id?: string; name?: string } | undefined
+                    : vicedeanAssignmentsMap.get(String(user._id))?.facultyId as { _id?: string; name?: string } | undefined;
+
+            return {
+                _id: user._id,
+                firstName: user.firstName,
+                lastName: user.lastName,
+                fullName: `${user.firstName} ${user.lastName}`.trim(),
+                email: user.email || '',
+                role: role?.name || null,
+                faculty: assignedFaculty
+                    ? {
+                        _id: String(assignedFaculty._id || ''),
+                        name: assignedFaculty.name || ''
+                    }
+                    : null
+            };
+        });
+
+        return res.status(200).json({
+            data,
+            totalCount: data.length,
+            tab
+        });
+    } catch (error: any) {
+        console.error('Error in getFacultyAssignmentUsers:', error);
+        return res.status(500).json({
+            success: false,
+            error: error.message || 'Failed to get faculty assignment users.'
+        });
+    }
+}
+
+export async function updateRoleManagementUser(req: Request, res: Response) {
+    try {
+        const { id } = req.params;
+        const rawRole = req.body.role;
+        const rawFacultyId = req.body.facultyId;
+        const role = rawRole === null || rawRole === '' ? null : String(rawRole);
+        const facultyId = rawFacultyId === null || rawFacultyId === '' ? null : String(rawFacultyId);
+        const allowedRoleNames = ['admin', 'secretary', 'vicedean', 'professor'];
+
+        if (role !== null && !allowedRoleNames.includes(role)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Rol no permitido'
+            });
+        }
+
+        const user = await UserModel.findById(id);
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: 'Usuario no encontrado'
+            });
+        }
+
+        if (facultyId) {
+            const facultyExists = await FacultyModel.exists({ _id: facultyId });
+            if (!facultyExists) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'La facultad seleccionada no existe'
+                });
+            }
+        }
+
+        const roleDocument = role ? await RoleModel.findOne({ name: role }).select('_id name') : null;
+        if (role && !roleDocument) {
+            return res.status(404).json({
+                success: false,
+                message: 'No se encontro el rol seleccionado'
+            });
+        }
+
+        user.roleId = roleDocument?._id || undefined;
+        await user.save();
+
+        if (role === 'secretary') {
+            await VicedeanModel.deleteOne({ userId: user._id });
+            if (facultyId) {
+                await SecretaryModel.findOneAndUpdate(
+                    { userId: user._id },
+                    { userId: user._id, facultyId },
+                    { upsert: true, new: true, setDefaultsOnInsert: true }
+                );
+            } else {
+                await SecretaryModel.deleteOne({ userId: user._id });
+            }
+        } else if (role === 'vicedean') {
+            await SecretaryModel.deleteOne({ userId: user._id });
+            if (facultyId) {
+                await VicedeanModel.findOneAndUpdate(
+                    { userId: user._id },
+                    { userId: user._id, facultyId },
+                    { upsert: true, new: true, setDefaultsOnInsert: true }
+                );
+            } else {
+                await VicedeanModel.deleteOne({ userId: user._id });
+            }
+        } else {
+            await Promise.all([
+                SecretaryModel.deleteOne({ userId: user._id }),
+                VicedeanModel.deleteOne({ userId: user._id })
+            ]);
+        }
+
+        const updatedUser = await UserModel.findById(user._id)
+            .populate('roleId', 'name')
+            .lean();
+
+        const currentRole = updatedUser?.roleId as { name?: string } | null | undefined;
+        const currentFacultyAssignment =
+            currentRole?.name === 'secretary'
+                ? await SecretaryModel.findOne({ userId: user._id }).populate('facultyId', 'name').lean()
+                : currentRole?.name === 'vicedean'
+                    ? await VicedeanModel.findOne({ userId: user._id }).populate('facultyId', 'name').lean()
+                    : null;
+        const assignedFaculty = currentFacultyAssignment?.facultyId as { _id?: string; name?: string } | undefined;
+
+        return res.status(200).json({
+            success: true,
+            message: 'Rol actualizado correctamente',
+            data: updatedUser ? {
+                _id: updatedUser._id,
+                firstName: updatedUser.firstName,
+                lastName: updatedUser.lastName,
+                fullName: `${updatedUser.firstName} ${updatedUser.lastName}`.trim(),
+                email: updatedUser.email || '',
+                role: currentRole?.name || null,
+                faculty: assignedFaculty
+                    ? {
+                        _id: String(assignedFaculty._id || ''),
+                        name: assignedFaculty.name || ''
+                    }
+                    : null
+            } : null
+        });
+    } catch (error: any) {
+        console.error('Error in updateRoleManagementUser:', error);
+        return res.status(500).json({
+            success: false,
+            error: error.message || 'Failed to update role management user.'
+        });
+    }
+}
+
+export async function updateFacultyAssignmentUser(req: Request, res: Response) {
+    try {
+        const { id } = req.params;
+        const rawFacultyId = req.body.facultyId;
+        const facultyId = rawFacultyId === null || rawFacultyId === '' ? null : String(rawFacultyId);
+
+        const user = await UserModel.findById(id)
+            .populate('roleId', 'name')
+            .lean();
+
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: 'Usuario no encontrado'
+            });
+        }
+
+        const currentRole = user.roleId as { name?: string } | null;
+        if (currentRole?.name !== 'secretary' && currentRole?.name !== 'vicedean') {
+            return res.status(400).json({
+                success: false,
+                message: 'Solo se puede editar la facultad de secretarios y vicedecanos'
+            });
+        }
+
+        if (facultyId) {
+            const facultyExists = await FacultyModel.exists({ _id: facultyId });
+            if (!facultyExists) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'La facultad seleccionada no existe'
+                });
+            }
+        }
+
+        if (currentRole.name === 'secretary') {
+            await VicedeanModel.deleteOne({ userId: user._id });
+            if (facultyId) {
+                await SecretaryModel.findOneAndUpdate(
+                    { userId: user._id },
+                    { userId: user._id, facultyId },
+                    { upsert: true, new: true, setDefaultsOnInsert: true }
+                );
+            } else {
+                await SecretaryModel.deleteOne({ userId: user._id });
+            }
+        } else {
+            await SecretaryModel.deleteOne({ userId: user._id });
+            if (facultyId) {
+                await VicedeanModel.findOneAndUpdate(
+                    { userId: user._id },
+                    { userId: user._id, facultyId },
+                    { upsert: true, new: true, setDefaultsOnInsert: true }
+                );
+            } else {
+                await VicedeanModel.deleteOne({ userId: user._id });
+            }
+        }
+
+        const updatedFacultyAssignment =
+            currentRole.name === 'secretary'
+                ? await SecretaryModel.findOne({ userId: user._id }).populate('facultyId', 'name').lean()
+                : await VicedeanModel.findOne({ userId: user._id }).populate('facultyId', 'name').lean();
+        const assignedFaculty = updatedFacultyAssignment?.facultyId as { _id?: string; name?: string } | undefined;
+
+        return res.status(200).json({
+            success: true,
+            message: 'Facultad actualizada correctamente',
+            data: {
+                _id: user._id,
+                firstName: user.firstName,
+                lastName: user.lastName,
+                fullName: `${user.firstName} ${user.lastName}`.trim(),
+                email: user.email || '',
+                role: currentRole.name || null,
+                faculty: assignedFaculty
+                    ? {
+                        _id: String(assignedFaculty._id || ''),
+                        name: assignedFaculty.name || ''
+                    }
+                    : null
+            }
+        });
+    } catch (error: any) {
+        console.error('Error in updateFacultyAssignmentUser:', error);
+        return res.status(500).json({
+            success: false,
+            error: error.message || 'Failed to update faculty assignment user.'
+        });
+    }
+}
 
 export async function getPendingGradesCount(req: Request, res: Response) {
     try {

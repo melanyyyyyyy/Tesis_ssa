@@ -73,7 +73,7 @@ const VicedeanDashboard: React.FC = () => {
             description: 'Asignar y gestionar el profesorado de las asignaturas por carrera.',
             icon: <AssignmentIndIcon />,
             path: '/vicedean/teaching-assignments',
-            color: theme.palette.success.main
+            color: theme.palette.secondary.main
         }
     ]
 

@@ -26,8 +26,8 @@ const toNumericScore = (value: unknown) => {
     return Number.isFinite(parsed) ? Math.max(2, Math.min(5, parsed)) : 2;
 };
 
-const average = (values: number[]) => {
-    if (!values.length) return 2;
+const average = (values: number[]): number | null => {
+    if (!values.length) return null;
     const total = values.reduce((sum, current) => sum + current, 0);
     return total / values.length;
 };
@@ -71,10 +71,14 @@ export async function getSubjectEvaluationHistory(req: Request, res: Response) {
             groupedMap.get(createdAtStr).scores.push(numericValue);
         });
 
-        const data = Array.from(groupedMap.values()).map(group => ({
-            ...group,
-            evaluationAverage: Number(average(group.scores).toFixed(2))
-        }));
+        const data = Array.from(groupedMap.values()).map(group => {
+            const evaluationAverage = average(group.scores);
+
+            return {
+                ...group,
+                evaluationAverage: evaluationAverage !== null ? Number(evaluationAverage.toFixed(2)) : null
+            };
+        });
 
         return res.status(200).json({ data });
     } catch (error: any) {
@@ -144,6 +148,8 @@ export async function getSubjectEvaluationBatchDetail(req: Request, res: Respons
             }))
             .sort((a, b) => a.studentName.localeCompare(b.studentName, 'es'));
 
+        const batchEvaluationAverage = average(scores);
+
         return res.status(200).json({
             batch: {
                 createdAt: firstEvaluation.createdAt,
@@ -152,7 +158,7 @@ export async function getSubjectEvaluationBatchDetail(req: Request, res: Respons
                 examinationType: firstEvaluation.examinationTypeId?.name || '',
                 evaluationDate: firstEvaluation.evaluationDate,
                 description: firstEvaluation.description || '',
-                evaluationAverage: Number(average(scores).toFixed(2)),
+                evaluationAverage: batchEvaluationAverage !== null ? Number(batchEvaluationAverage.toFixed(2)) : null,
                 subjectName: subject.name || ''
             },
             data,
@@ -400,7 +406,7 @@ const calculateSubjectEvaluationAverageForStudent = (
 ) => {
     const key = getSubjectStudentKey(subjectId, studentId);
     const matriculatedIds = matriculatedIdsBySubjectStudent.get(key) || [];
-    if (matriculatedIds.length === 0) return 2;
+    if (matriculatedIds.length === 0) return null;
 
     const systematic: number[] = [];
     const partial: number[] = [];
@@ -446,7 +452,7 @@ const calculateSubjectEvaluationAverageForStudent = (
         totalWeightUsed += weights.final;
     }
 
-    if (totalWeightUsed === 0) return 2;
+    if (totalWeightUsed === 0) return null;
 
     const finalResult = weightedSum / totalWeightUsed;
 
@@ -598,7 +604,7 @@ export async function getSubjectStudentsSummary(req: Request, res: Response) {
             const attendance = attendanceMap.get(studentKey);
             const attendanceAverage = attendance && attendance.total > 0
                 ? (attendance.present / attendance.total) * 100
-                : 0;
+                : null;
 
             const evaluationAverage = studentKey
                 ? calculateSubjectEvaluationAverageForStudent(
@@ -607,13 +613,13 @@ export async function getSubjectStudentsSummary(req: Request, res: Response) {
                     matriculatedIdsBySubjectStudent,
                     evaluationRowsByMatriculated
                 )
-                : 0;
+                : null;
 
             return {
                 _id: String(item._id),
                 studentId: studentIdValue ? String(studentIdValue) : null,
                 studentName: `${(studentRecord?.firstName as string) || ''} ${(studentRecord?.lastName as string) || ''}`.trim() || 'Sin nombre',
-                attendanceAverage: Number(attendanceAverage.toFixed(2)),
+                attendanceAverage: attendanceAverage !== null ? Number(attendanceAverage.toFixed(2)) : null,
                 evaluationAverage,
                 academicYear: item.academicYear
             };
@@ -948,11 +954,11 @@ export async function getAcademicRanking(req: Request, res: Response) {
                     studentIdValue,
                     matriculatedIdsBySubjectStudent,
                     evaluationRowsByMatriculated
-                ));
+                ))
+                .filter((averageValue): averageValue is number => averageValue !== null);
 
-            const generalAverage = subjectAverages.length > 0
-                ? Number(average(subjectAverages).toFixed(2))
-                : 2;
+            const generalAverageValue = average(subjectAverages);
+            const generalAverage = generalAverageValue !== null ? Number(generalAverageValue.toFixed(2)) : null;
 
             return {
                 _id: studentIdValue,
@@ -964,8 +970,13 @@ export async function getAcademicRanking(req: Request, res: Response) {
         });
 
         rankingRows.sort((a, b) => {
-            if (b.generalAverage !== a.generalAverage) return b.generalAverage - a.generalAverage;
-            if (b.subjectEvaluationAverage !== a.subjectEvaluationAverage) return b.subjectEvaluationAverage - a.subjectEvaluationAverage;
+            const generalAverageA = a.generalAverage ?? Number.NEGATIVE_INFINITY;
+            const generalAverageB = b.generalAverage ?? Number.NEGATIVE_INFINITY;
+            const subjectAverageA = a.subjectEvaluationAverage ?? Number.NEGATIVE_INFINITY;
+            const subjectAverageB = b.subjectEvaluationAverage ?? Number.NEGATIVE_INFINITY;
+
+            if (generalAverageB !== generalAverageA) return generalAverageB - generalAverageA;
+            if (subjectAverageB !== subjectAverageA) return subjectAverageB - subjectAverageA;
             return a.studentName.localeCompare(b.studentName, 'es');
         });
 

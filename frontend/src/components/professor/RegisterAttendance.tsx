@@ -59,6 +59,68 @@ interface RegisterAttendanceRowForm {
     justificationReason: string;
 }
 
+interface AttendanceRowProps {
+    index: number;
+    row: RegisterAttendanceRowForm;
+    disableInputs: boolean;
+    onPresenceChange: (studentId: string, checked: boolean) => void;
+    onJustifiedChange: (studentId: string, checked: boolean) => void;
+    onJustificationReasonChange: (studentId: string, value: string) => void;
+}
+
+const AttendanceRow = React.memo<AttendanceRowProps>(({
+    index,
+    row,
+    disableInputs,
+    onPresenceChange,
+    onJustifiedChange,
+    onJustificationReasonChange
+}) => {
+    return (
+        <TableRow>
+            <TableCell>{index + 1}</TableCell>
+            <TableCell>
+                <Typography variant="body2" fontWeight={500}>{row.studentName}</Typography>
+            </TableCell>
+            <TableCell>
+                <Stack direction="row" alignItems="center" spacing={0.5}>
+                    <Checkbox
+                        checked={row.isPresent}
+                        onChange={(event) => onPresenceChange(row.studentId, event.target.checked)}
+                        disabled={disableInputs}
+                    />
+                    <Typography variant="body2">
+                        {row.isPresent ? 'Sí' : 'No'}
+                    </Typography>
+                </Stack>
+            </TableCell>
+            <TableCell>
+                <Stack direction="row" alignItems="center" spacing={0.5}>
+                    <Checkbox
+                        checked={!row.isPresent && row.justified}
+                        onChange={(event) => onJustifiedChange(row.studentId, event.target.checked)}
+                        disabled={disableInputs || row.isPresent}
+                    />
+                    <Typography variant="body2">
+                        {!row.isPresent && row.justified ? 'Sí' : 'No'}
+                    </Typography>
+                </Stack>
+            </TableCell>
+            <TableCell>
+                <TextField
+                    value={row.justificationReason}
+                    onChange={(event) => onJustificationReasonChange(row.studentId, event.target.value)}
+                    fullWidth
+                    size="small"
+                    placeholder="Escriba la razón de la falta"
+                    disabled={disableInputs || row.isPresent || !row.justified}
+                    inputProps={{ maxLength: 500 }}
+                />
+            </TableCell>
+        </TableRow>
+    );
+});
+
 const RegisterAttendance: React.FC<RegisterAttendanceProps> = ({
     subject,
     mode = 'create',
@@ -166,7 +228,7 @@ const RegisterAttendance: React.FC<RegisterAttendanceProps> = ({
         };
     }, []);
 
-    const handlePresenceChange = (studentId: string, checked: boolean) => {
+    const handlePresenceChange = useCallback((studentId: string, checked: boolean) => {
         setRows((current) => current.map((row) => {
             if (row.studentId !== studentId) return row;
             return {
@@ -176,9 +238,9 @@ const RegisterAttendance: React.FC<RegisterAttendanceProps> = ({
                 justificationReason: checked ? '' : row.justificationReason
             };
         }));
-    };
+    }, []);
 
-    const handleJustifiedChange = (studentId: string, checked: boolean) => {
+    const handleJustifiedChange = useCallback((studentId: string, checked: boolean) => {
         setRows((current) => current.map((row) => {
             if (row.studentId !== studentId) return row;
             return {
@@ -187,9 +249,9 @@ const RegisterAttendance: React.FC<RegisterAttendanceProps> = ({
                 justificationReason: checked ? row.justificationReason : ''
             };
         }));
-    };
+    }, []);
 
-    const handleJustificationReasonChange = (studentId: string, value: string) => {
+    const handleJustificationReasonChange = useCallback((studentId: string, value: string) => {
         setRows((current) => current.map((row) => {
             if (row.studentId !== studentId) return row;
             return {
@@ -197,7 +259,7 @@ const RegisterAttendance: React.FC<RegisterAttendanceProps> = ({
                 justificationReason: value
             };
         }));
-    };
+    }, []);
 
     const handleCancelClick = () => {
         if (!onCancel || disableInputs) return;
@@ -342,47 +404,15 @@ const RegisterAttendance: React.FC<RegisterAttendanceProps> = ({
                                 </TableRow>
                             ) : (
                                 rows.map((row, index) => (
-                                    <TableRow key={row.studentId}>
-                                        <TableCell>{index + 1}</TableCell>
-                                        <TableCell>
-                                            <Typography variant="body2" fontWeight={500}>{row.studentName}</Typography>
-                                        </TableCell>
-                                        <TableCell>
-                                            <Stack direction="row" alignItems="center" spacing={0.5}>
-                                                <Checkbox
-                                                    checked={row.isPresent}
-                                                    onChange={(event) => handlePresenceChange(row.studentId, event.target.checked)}
-                                                    disabled={disableInputs}
-                                                />
-                                                <Typography variant="body2">
-                                                    {row.isPresent ? 'Sí' : 'No'}
-                                                </Typography>
-                                            </Stack>
-                                        </TableCell>
-                                        <TableCell>
-                                            <Stack direction="row" alignItems="center" spacing={0.5}>
-                                                <Checkbox
-                                                    checked={!row.isPresent && row.justified}
-                                                    onChange={(event) => handleJustifiedChange(row.studentId, event.target.checked)}
-                                                    disabled={disableInputs || row.isPresent}
-                                                />
-                                                <Typography variant="body2">
-                                                    {!row.isPresent && row.justified ? 'Sí' : 'No'}
-                                                </Typography>
-                                            </Stack>
-                                        </TableCell>
-                                        <TableCell>
-                                            <TextField
-                                                value={row.justificationReason}
-                                                onChange={(event) => handleJustificationReasonChange(row.studentId, event.target.value)}
-                                                fullWidth
-                                                size="small"
-                                                placeholder="Escriba la razón de la falta"
-                                                disabled={disableInputs || row.isPresent || !row.justified}
-                                                inputProps={{ maxLength: 500 }}
-                                            />
-                                        </TableCell>
-                                    </TableRow>
+                                    <AttendanceRow
+                                        key={row.studentId}
+                                        index={index}
+                                        row={row}
+                                        disableInputs={disableInputs}
+                                        onPresenceChange={handlePresenceChange}
+                                        onJustifiedChange={handleJustifiedChange}
+                                        onJustificationReasonChange={handleJustificationReasonChange}
+                                    />
                                 ))
                             )}
                         </TableBody>

@@ -75,12 +75,18 @@ const SubjectDetail: React.FC = () => {
         {
             field: 'attendanceAverage',
             headerName: 'Promedio de asistencia',
-            renderCell: (value) => `${Number(value || 0).toFixed(2)}%`
+            renderCell: (value) => {
+                if (value === null || value === undefined) return 'Sin registros';
+                return `${Number(value).toFixed(2)}%`;
+            }
         },
         {
             field: 'evaluationAverage',
             headerName: 'Promedio de la evaluación',
-            renderCell: (value) => Number(value || 0).toFixed(2)
+            renderCell: (value) => {
+                if (value === null || value === undefined) return 'Sin registros';
+                return Number(value).toFixed(2);
+            }
         }
     ], []);
 

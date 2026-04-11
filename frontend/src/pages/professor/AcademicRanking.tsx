@@ -61,7 +61,8 @@ const AcademicRanking: React.FC = () => {
             field: 'subjectEvaluationAverage',
             headerName: `Promedio de evaluación en ${selectedSubject?.name || 'la asignatura'}`,
             renderCell: (value) => {
-                const numericValue = Number(value || 0);
+                if (value === null || value === undefined) return 'Sin registros';
+                const numericValue = Number(value);
                 return numericValue.toFixed(2);
             }
         },
@@ -69,7 +70,8 @@ const AcademicRanking: React.FC = () => {
             field: 'generalAverage',
             headerName: 'Promedio general',
             renderCell: (value) => {
-                const numericValue = Number(value || 0);
+                if (value === null || value === undefined) return 'Sin registros';
+                const numericValue = Number(value);
                 return numericValue.toFixed(2);
             }
         }

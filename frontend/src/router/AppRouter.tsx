@@ -14,6 +14,8 @@ import SigenuTableDetailPage from '../pages/admin/SigenuTableDetailPage';
 import SigenuPendingPage from '../pages/admin/SigenuPendingPage';
 import EvaluationsToExportPage from '../pages/admin/EvaluationsToExportPage';
 import LastExportPage from '../pages/admin/LastExportPage';
+import FacultyAssignmentPage from '../pages/admin/FacultyAssignmentPage';
+import RoleManagementPage from '../pages/admin/RoleManagementPage';
 
 import ProfessorExamCalendarPage from '../pages/professor/ExamCalendarPage';
 import RegisterAttendancePage from '../pages/professor/RegisterAttendancePage';
@@ -81,6 +83,8 @@ export default function AppRouter() {
           <Route path="/admin/sigenu-pending" element={<SigenuPendingPage />} />
           <Route path="/admin/sigenu-pending/export" element={<EvaluationsToExportPage />} />
           <Route path="/admin/sigenu-pending/last-export" element={<LastExportPage />} />
+          <Route path="/admin/faculty-assignment" element={<FacultyAssignmentPage />} />
+          <Route path="/admin/role-management" element={<RoleManagementPage />} />
         </Route>
 
         {/* Secretary Routes */}
