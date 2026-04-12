@@ -14,6 +14,7 @@ import {
 import {
     EvaluationScoreModel,
     RoleModel,
+    RoleRequestModel,
     SecretaryModel,
     UserModel,
     VicedeanModel
@@ -45,7 +46,7 @@ export const getDashboardStats = async (req: Request, res: Response) => {
 export async function getRoleManagementUsers(req: Request, res: Response) {
     try {
         const statusParam = typeof req.query.status === 'string' ? req.query.status : 'all';
-        const status = ['pending', 'assigned', 'all'].includes(statusParam) ? statusParam : 'all';
+        const status = ['pending', 'assigned', 'all', 'role_requests'].includes(statusParam) ? statusParam : 'all';
         const allowedRoleNames = ['admin', 'secretary', 'vicedean', 'professor'];
 
         const allowedRoles = await RoleModel.find({ name: { $in: allowedRoleNames } })
@@ -53,22 +54,49 @@ export async function getRoleManagementUsers(req: Request, res: Response) {
             .lean();
 
         const allowedRoleIds = allowedRoles.map((role) => role._id);
-        const filter =
-            status === 'pending'
-                ? { roleId: null }
-                : status === 'assigned'
-                    ? { roleId: { $in: allowedRoleIds } }
-                    : {
-                        $or: [
-                            { roleId: null },
-                            { roleId: { $in: allowedRoleIds } }
-                        ]
-                    };
 
-        const users = await UserModel.find(filter)
-            .populate('roleId', 'name')
-            .sort({ firstName: 1, lastName: 1 })
+        let filter: any = {};
+        if (status === 'pending') {
+            filter = { roleId: null };
+        } else if (status === 'assigned') {
+            filter = { roleId: { $in: allowedRoleIds } };
+        } else if (status === 'all') {
+            filter = {
+                $or: [
+                    { roleId: null },
+                    { roleId: { $in: allowedRoleIds } }
+                ]
+            };
+        }
+
+        // Fetch pending requests to merge them
+        const pendingRequests = await RoleRequestModel.find({ status: 'pending' })
+            .populate('requestedRole', 'name')
+            .populate('faculty', 'name')
             .lean();
+
+        const pendingRequestsMap = new Map(
+            pendingRequests.map((request: any) => [String(request.user), request])
+        );
+
+        let users: any[] = [];
+        if (status === 'role_requests') {
+            // Only fetch users who have a pending request
+            const userIdsWithRequests = pendingRequests.map((req: any) => req.user);
+            users = await UserModel.find({ _id: { $in: userIdsWithRequests } })
+                .populate('roleId', 'name')
+                .sort({ firstName: 1, lastName: 1 })
+                .lean();
+        } else {
+            users = await UserModel.find(filter)
+                .populate('roleId', 'name')
+                .sort({ firstName: 1, lastName: 1 })
+                .lean();
+        }
+
+        if (status === 'pending') {
+            users = users.filter((user) => !pendingRequestsMap.has(String(user._id)));
+        }
 
         const userIds = users.map((user) => user._id);
         const [secretaryAssignments, vicedeanAssignments] = await Promise.all([
@@ -91,20 +119,30 @@ export async function getRoleManagementUsers(req: Request, res: Response) {
             const role = user.roleId as { name?: string } | null;
             const secretaryAssignment = secretaryAssignmentsMap.get(String(user._id));
             const vicedeanAssignment = vicedeanAssignmentsMap.get(String(user._id));
-            const assignedFaculty =
+            const pendingRequest = pendingRequestsMap.get(String(user._id)) as any;
+
+            let assignedFaculty =
                 role?.name === 'secretary'
                     ? secretaryAssignment?.facultyId as { _id?: string; name?: string } | undefined
                     : role?.name === 'vicedean'
                         ? vicedeanAssignment?.facultyId as { _id?: string; name?: string } | undefined
                         : undefined;
-
+ 
+            // If they have a pending request, use the requested faculty for display
+            if (pendingRequest) {
+                assignedFaculty = pendingRequest.faculty;
+            }
+ 
             return {
                 _id: user._id,
+                requestId: pendingRequest?._id || null,
                 firstName: user.firstName,
                 lastName: user.lastName,
                 fullName: `${user.firstName} ${user.lastName}`.trim(),
                 email: user.email || '',
-                role: role?.name || null,
+                role: pendingRequest ? pendingRequest.requestedRole.name : (role?.name || null),
+                isPendingApproval: !!pendingRequest,
+                accessDenied: !!user.accessDenied,
                 faculty: assignedFaculty
                     ? {
                         _id: String(assignedFaculty._id || ''),
@@ -125,6 +163,94 @@ export async function getRoleManagementUsers(req: Request, res: Response) {
             success: false,
             error: error.message || 'Failed to get role management users.'
         });
+    }
+}
+
+export async function approveRoleRequest(req: Request, res: Response) {
+    try {
+        const { requestId } = req.params;
+        const request = await RoleRequestModel.findById(requestId)
+            .populate('user')
+            .populate('requestedRole')
+            .populate('faculty');
+
+        if (!request) {
+            return res.status(404).json({ message: 'Solicitud no encontrada' });
+        }
+
+        const requestUser = request.user as any;
+        const requestedRole = request.requestedRole as any;
+        const requestFaculty = request.faculty as any;
+
+        const user = await UserModel.findById(requestUser._id);
+        if (!user) {
+            return res.status(404).json({ message: 'Usuario no encontrado' });
+        }
+
+        const roleName = requestedRole.name;
+        user.roleId = requestedRole._id;
+        user.accessDenied = false; // Reset access denied when approving a role
+        await user.save();
+
+        if (roleName === 'secretary') {
+            await VicedeanModel.deleteOne({ userId: user._id });
+            if (requestFaculty?._id) {
+                await SecretaryModel.findOneAndUpdate(
+                    { userId: user._id },
+                    { userId: user._id, facultyId: requestFaculty._id },
+                    { upsert: true, new: true }
+                );
+            }
+        } else if (roleName === 'vicedean') {
+            await SecretaryModel.deleteOne({ userId: user._id });
+            if (requestFaculty?._id) {
+                await VicedeanModel.findOneAndUpdate(
+                    { userId: user._id },
+                    { userId: user._id, facultyId: requestFaculty._id },
+                    { upsert: true, new: true }
+                );
+            }
+        } else {
+            await Promise.all([
+                SecretaryModel.deleteOne({ userId: user._id }),
+                VicedeanModel.deleteOne({ userId: user._id })
+            ]);
+        }
+
+        // Mark as reviewed
+        request.status = 'reviewed';
+        await request.save();
+
+        return res.status(200).json({ success: true, message: 'Solicitud aprobada correctamente' });
+    } catch (error: any) {
+        console.error('Error in approveRoleRequest:', error);
+        return res.status(500).json({ message: 'Error al aprobar solicitud', error: error.message });
+    }
+}
+
+export async function rejectRoleRequest(req: Request, res: Response) {
+    try {
+        const { requestId } = req.params;
+        const request = await RoleRequestModel.findById(requestId);
+
+        if (!request) {
+            return res.status(404).json({ message: 'Solicitud no encontrada' });
+        }
+
+        const user = await UserModel.findById(request.user);
+        if (!user) {
+            return res.status(404).json({ message: 'Usuario no encontrado' });
+        }
+
+        user.accessDenied = true;
+        await user.save();
+
+        await RoleRequestModel.findByIdAndDelete(requestId);
+
+        return res.status(200).json({ success: true, message: 'Solicitud rechazada correctamente' });
+    } catch (error: any) {
+        console.error('Error in rejectRoleRequest:', error);
+        return res.status(500).json({ message: 'Error al rechazar solicitud', error: error.message });
     }
 }
 
@@ -249,7 +375,13 @@ export async function updateRoleManagementUser(req: Request, res: Response) {
             });
         }
 
-        user.roleId = roleDocument?._id || undefined;
+        user.roleId = roleDocument?._id ?? null;
+        
+        // Reset accessDenied if a role is being assigned (not unassigned)
+        if (roleDocument) {
+            user.accessDenied = false;
+        }
+        
         await user.save();
 
         if (role === 'secretary') {

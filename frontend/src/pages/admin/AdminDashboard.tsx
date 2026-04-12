@@ -43,19 +43,20 @@ const AdminDashboard: React.FC = () => {
             color: theme.palette.primary.main
         },
         {
+            title: 'Gestión de Roles',
+            description: 'Administrar privilegios de acceso (profesor, vicedecano, secretario, administrador).',
+            icon: <ManageAccountsIcon />,
+            path: '/admin/role-management',
+            color: theme.palette.info.main
+        },
+        {
             title: 'Asignación de Facultades',
             description: 'Vincular a los secretarios y vicedecanos con su facultad correspondiente.',
             icon: <DomainIcon />,
             path: '/admin/faculty-assignment',
             color: theme.palette.warning.main
         },
-        {
-            title: 'Gestión de Roles',
-            description: 'Administrar privilegios de acceso (profesor, vicedecano, secretario, administrador).',
-            icon: <ManageAccountsIcon />,
-            path: '/admin/role-management',
-            color: theme.palette.info.main
-        }
+
     ];
 
     return (
@@ -68,7 +69,7 @@ const AdminDashboard: React.FC = () => {
 
                 <Grid container spacing={3}>
                     {menuItems.map((item, index) => (
-                        <Grid size={{ xs: 12, sm: 6, md: 4 }} key={index}>
+                        <Grid size={{ xs: 12, sm: 6, md: 3 }} key={index}>
                             <Card
                                 elevation={0}
                                 onClick={() => navigate(item.path)}

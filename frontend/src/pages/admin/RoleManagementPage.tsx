@@ -21,7 +21,7 @@ import {
     Typography,
     useTheme
 } from '@mui/material';
-import { Edit as EditIcon, Refresh as RefreshIcon } from '@mui/icons-material';
+import { Edit as EditIcon, Refresh as RefreshIcon, Check as CheckIcon, Close as CloseIcon } from '@mui/icons-material';
 import MainLayout from '../../layouts/MainLayout';
 import PageHeader from '../../components/common/PageHeader';
 import ReusableTable, {
@@ -29,8 +29,9 @@ import ReusableTable, {
     type ReusableTableColumn
 } from '../../components/common/ReusableTable';
 import { useAuth } from '../../context/AuthContext';
+import { ModalDialog } from '../../components/common/ModalDialog';
 
-type RoleManagementTab = 'pending' | 'assigned' | 'all';
+type RoleManagementTab = 'role_requests' | 'pending' | 'assigned' | 'all';
 type ManagedRole = 'admin' | 'secretary' | 'vicedean' | 'professor' | null;
 type EditableRoleValue = 'unassigned' | 'admin' | 'secretary' | 'vicedean' | 'professor';
 
@@ -41,22 +42,27 @@ interface FacultyOption {
 
 interface RoleManagementUser {
     _id: string;
+    requestId?: string | null;
     firstName: string;
     lastName: string;
     fullName: string;
     email: string;
     role: ManagedRole;
     faculty: FacultyOption | null;
+    isPendingApproval?: boolean;
+    accessDenied?: boolean;
 }
 
 const TAB_LABELS: Record<RoleManagementTab, string> = {
+    role_requests: 'Pendientes por Aprobar',
     pending: 'Pendientes (Sin Rol)',
     assigned: 'Asignados',
     all: 'Todos'
 };
 
 const TAB_DESCRIPTIONS: Record<RoleManagementTab, string> = {
-    pending: 'Usuarios pendientes de asignacion de rol.',
+    role_requests: 'Solicitudes de rol enviadas por los usuarios.',
+    pending: 'Usuarios que no han solicitado rol ni tienen uno asignado.',
     assigned: 'Usuarios que ya tienen un rol asignado.',
     all: 'Vista completa de usuarios administrables.'
 };
@@ -127,81 +133,237 @@ const RoleManagementPage: React.FC = () => {
         void fetchFaculties();
     }, [logout, token]);
 
-    const columns = useMemo<ReusableTableColumn<RoleManagementUser>[]>(() => [
-        {
-            field: 'fullName',
-            headerName: 'Nombre',
-            renderCell: (_value, row) => `${row.firstName} ${row.lastName}`.trim()
-        },
-        {
-            field: 'email',
-            headerName: 'Correo',
-            renderCell: (value) => formatInstitutionalEmail(String(value || ''))
-        },
-        {
-            field: 'role',
-            headerName: 'Rol',
-            renderCell: (value) => {
-                const role = value as ManagedRole;
+    const columns = useMemo<ReusableTableColumn<RoleManagementUser>[]>(() => {
+        const baseColumns: ReusableTableColumn<RoleManagementUser>[] = [
+            {
+                field: 'fullName',
+                headerName: 'Nombre',
+                renderCell: (_value, row) => `${row.firstName} ${row.lastName}`.trim()
+            },
+            {
+                field: 'email',
+                headerName: 'Correo',
+                renderCell: (value) => formatInstitutionalEmail(String(value || ''))
+            },
+            {
+                field: 'role',
+                headerName: 'Rol',
+                renderCell: (value) => {
+                    const role = value as ManagedRole;
 
-                if (!role) {
+                    if (!role) {
+                        return (
+                            <Chip
+                                label="Sin asignar"
+                                size="small"
+                                sx={{
+                                    borderRadius: theme.customShape.full,
+                                    bgcolor: alpha(theme.palette.text.secondary, 0.12),
+                                    color: theme.palette.text.secondary,
+                                    fontWeight: 700
+                                }}
+                            />
+                        );
+                    }
+
+                    const roleConfig: Record<Exclude<ManagedRole, null>, { label: string; color: string }> = {
+                        admin: { label: 'Administrador', color: theme.palette.info.main },
+                        secretary: { label: 'Secretario', color: theme.palette.warning.main },
+                        vicedean: { label: 'Vicedecano', color: theme.palette.secondary.main },
+                        professor: { label: 'Profesor', color: theme.palette.primary.main }
+                    };
+
+                    const config = roleConfig[role];
+
                     return (
                         <Chip
-                            label="Sin asignar"
+                            label={config.label}
                             size="small"
                             sx={{
                                 borderRadius: theme.customShape.full,
-                                bgcolor: alpha(theme.palette.text.secondary, 0.12),
-                                color: theme.palette.text.secondary,
+                                bgcolor: alpha(config.color, 0.12),
+                                color: config.color,
+                                fontWeight: 700
+                            }}
+                        />
+                    );
+                }
+            }
+        ];
+
+        // Add 'Estado' column to all tabs
+        baseColumns.push({
+            field: 'isPendingApproval',
+            headerName: 'Estado',
+            renderCell: (_value, row) => {
+                if (row.accessDenied) {
+                    return (
+                        <Chip
+                            label="Denegado"
+                            size="small"
+                            sx={{
+                                borderRadius: theme.customShape.full,
+                                bgcolor: alpha(theme.palette.error.main, 0.12),
+                                color: theme.palette.error.main,
                                 fontWeight: 700
                             }}
                         />
                     );
                 }
 
-                const roleConfig: Record<Exclude<ManagedRole, null>, { label: string; color: string }> = {
-                    admin: { label: 'Administrador', color: theme.palette.info.main },
-                    secretary: { label: 'Secretario', color: theme.palette.warning.main },
-                    vicedean: { label: 'Vicedecano', color: theme.palette.secondary.main },
-                    professor: { label: 'Profesor', color: theme.palette.primary.main }
-                };
-
-                const config = roleConfig[role];
-
+                if (row.isPendingApproval) {
+                    return (
+                        <Chip
+                            label="Pendiente"
+                            size="small"
+                            sx={{
+                                borderRadius: theme.customShape.full,
+                                bgcolor: alpha(theme.palette.warning.main, 0.12),
+                                color: theme.palette.warning.main,
+                                fontWeight: 700
+                            }}
+                        />
+                    );
+                }
+                
                 return (
                     <Chip
-                        label={config.label}
+                        label="Aprobado"
                         size="small"
                         sx={{
                             borderRadius: theme.customShape.full,
-                            bgcolor: alpha(config.color, 0.12),
-                            color: config.color,
+                            bgcolor: alpha(theme.palette.success.main, 0.12),
+                            color: theme.palette.success.main,
                             fontWeight: 700
                         }}
                     />
                 );
             }
-        }
-    ], [theme]);
+        });
 
-    const actions = useMemo<ReusableTableAction<RoleManagementUser>[]>(() => [
-        {
-            variant: 'edit',
-            label: 'Editar',
-            icon: <EditIcon fontSize="small" />,
-            onClick: (row) => {
-                if (user && row._id === user._id) {
-                    setInfoMessage('No puedes editar tu propio rol para evitar perder permisos de administrador.');
-                    return;
-                }
-                setInfoMessage(null);
-                setSelectedUser(row);
-                setSelectedRole(getEditableRoleValue(row.role));
-                setSelectedFacultyId(row.faculty?._id || '');
-                setEditDialogOpen(true);
+        // Add 'Facultad' column
+        baseColumns.push({
+            field: 'faculty',
+            headerName: 'Facultad',
+            renderCell: (value, row) => {
+                if (row.role === 'admin') return '-';
+                if (row.role === 'professor') return '-';
+                const faculty = value as FacultyOption | null;
+                return faculty?.name || '-';
             }
+        });
+
+        return baseColumns;
+    }, [theme, activeTab]);
+
+    const handleApprove = async (row: RoleManagementUser) => {
+        if (!token || !row.requestId) return;
+        setInfoMessage(null);
+        try {
+            const response = await fetch(`${import.meta.env.VITE_API_BASE}/admin/role-requests/${row.requestId}/approve`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            if (response.status === 401) { logout(); return; }
+            if (!response.ok) {
+                const result = await response.json().catch(() => ({}));
+                throw new Error(result?.message || 'Error al aprobar solicitud');
+            }
+
+            setRefreshKey((prev) => prev + 1);
+            setInfoMessage('Solicitud aprobada correctamente.');
+        } catch (error) {
+            setInfoMessage(error instanceof Error ? error.message : 'Error al aprobar solicitud');
         }
-    ], [user]);
+    };
+
+    const handleReject = async (row: RoleManagementUser) => {
+        if (!token || !row.requestId) return;
+        setInfoMessage(null);
+        try {
+            const response = await fetch(`${import.meta.env.VITE_API_BASE}/admin/role-requests/${row.requestId}/reject`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            if (response.status === 401) { logout(); return; }
+            if (!response.ok) {
+                const result = await response.json().catch(() => ({}));
+                throw new Error(result?.message || 'Error al rechazar solicitud');
+            }
+
+            setRefreshKey((prev) => prev + 1);
+            setInfoMessage('Solicitud rechazada correctamente.');
+        } catch (error) {
+            setInfoMessage(error instanceof Error ? error.message : 'Error al rechazar solicitud');
+        }
+    };
+
+    const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
+    const [userToReject, setUserToReject] = useState<RoleManagementUser | null>(null);
+
+    const actions = useMemo<ReusableTableAction<RoleManagementUser>[]>(() => {
+        const baseActions: ReusableTableAction<RoleManagementUser>[] = [];
+
+        // Add Approve/Reject actions if the user is pending approval
+        // These are visible in 'role_requests' and 'all' tabs
+        if (activeTab === 'role_requests' || activeTab === 'all') {
+            baseActions.push(
+                {
+                    variant: 'custom',
+                    label: 'Aprobar',
+                    icon: <CheckIcon fontSize="small" />,
+                    color: 'success',
+                    onClick: (row) => handleApprove(row),
+                    hidden: (row) => !row.isPendingApproval
+                },
+                {
+                    variant: 'custom',
+                    label: 'Rechazar',
+                    icon: <CloseIcon fontSize="small" />,
+                    color: 'error',
+                    onClick: (row) => {
+                        setUserToReject(row);
+                        setRejectDialogOpen(true);
+                    },
+                    hidden: (row) => !row.isPendingApproval
+                }
+            );
+        }
+
+        // Add Edit action if the user is NOT pending approval or if we are in other tabs
+        // In 'all' tab, we only show Edit if NOT pending approval
+        if (activeTab !== 'role_requests') {
+            baseActions.push({
+                variant: 'edit',
+                label: 'Editar',
+                icon: <EditIcon fontSize="small" />,
+                onClick: (row) => {
+                    if (user && row._id === user._id) {
+                        setInfoMessage('No puedes editar tu propio rol para evitar perder permisos de administrador.');
+                        return;
+                    }
+                    setInfoMessage(null);
+                    setSelectedUser(row);
+                    setSelectedRole(getEditableRoleValue(row.role));
+                    setSelectedFacultyId(row.faculty?._id || '');
+                    setEditDialogOpen(true);
+                },
+                hidden: (row) => activeTab === 'all' && !!row.isPendingApproval
+            });
+        }
+
+        return baseActions;
+    }, [user, activeTab, token]);
+
+    const handleConfirmReject = async () => {
+        if (userToReject) {
+            await handleReject(userToReject);
+            setRejectDialogOpen(false);
+            setUserToReject(null);
+        }
+    };
 
     const handleCloseDialog = () => {
         if (savingEdit) return;
@@ -295,6 +457,7 @@ const RoleManagementPage: React.FC = () => {
                             }
                         }}
                     >
+                        <Tab label={TAB_LABELS.role_requests} value="role_requests" />
                         <Tab label={TAB_LABELS.pending} value="pending" />
                         <Tab label={TAB_LABELS.assigned} value="assigned" />
                         <Tab label={TAB_LABELS.all} value="all" />
@@ -394,6 +557,20 @@ const RoleManagementPage: React.FC = () => {
                         </Button>
                     </DialogActions>
                 </Dialog>
+
+                <ModalDialog
+                    open={rejectDialogOpen}
+                    onClose={() => {
+                        setRejectDialogOpen(false);
+                        setUserToReject(null);
+                    }}
+                    onConfirm={handleConfirmReject}
+                    title="Confirmar rechazo"
+                    description={`¿Estás seguro de que deseas rechazar la solicitud de rol para ${userToReject?.fullName}? El usuario será marcado con acceso denegado.`}
+                    confirmText="Rechazar"
+                    cancelText="Cancelar"
+                    variant="error"
+                />
             </Container>
         </MainLayout>
     );

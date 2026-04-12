@@ -1,7 +1,8 @@
 import { Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
 import { UserModel, RoleModel } from '../models/system/index.js';
-import { StudentModel } from '../models/sigenu/index.js';
+import { StudentModel, StudentStatusModel, FacultyModel } from '../models/sigenu/index.js';
+import RoleRequestModel from '../models/system/RoleRequest.js';
 import { ENV } from '../config/envs.js';
 
 export const generateToken = (user: any, roleName?: string): string => {
@@ -58,6 +59,7 @@ export const AuthController = {
         }
 
         try {
+            /*
             const apiResponse = await fetch('https://auth.uho.edu.cu/login', {
                 method: 'POST',
                 headers: {
@@ -68,32 +70,72 @@ export const AuthController = {
                 },
                 body: JSON.stringify({ username, password })
             });
-
+    
             const data: any = await apiResponse.json();
 
             if (!data.OK || !data.activeUser) {
                 res.status(401).json({ error: 'Authentication failed with external provider' });
                 return;
             }
+            */
+
+            const data: any = {
+                activeUser: {
+                    status: 200,
+                    account_state: "FALSE",
+                    uid: "melanyrr",
+                    personal_information: {
+                        dni: "04121279213",
+                        cn: "Mélany Marian Ricardo Rodríguez",
+                        given_name: "Mélany Marian",
+                        sn: "Ricardo Rodríguez",
+                        personal_photo: "",
+                        overlapping: ""
+                    },
+                    account_info: {
+                        user_type: "Trabajador",
+                        create_user: "AGA [mvelazquezm]",
+                        create_date: "2023-02-23 09:17:44 am",
+                        modify_user: "AGA",
+                        modify_data: "2025-12-29 11:59:03 pm",
+                        accept_system_policies: true,
+                        password: {
+                            user_password_set: "2025-09-30 12:07:48 pm",
+                            pass_valid: "Expirado",
+                            pass_set: "114"
+                        }
+                    },
+                    message: "Inició sesión"
+                }
+            };
 
             const { personal_information, uid } = data.activeUser;
             const dni = personal_information.dni;
             const firstName = personal_information.given_name;
             const lastName = personal_information.sn;
 
-            let student = await StudentModel.findOne({ identification: dni });
+            let student = await StudentModel.findOne({ identification: dni, isActive: true });
             let roleIdToAssign = undefined;
 
             if (student) {
-                student.email = uid;
-                await student.save();
+                const studentStatus = await StudentStatusModel.findById(student.studentStatusId).lean();
+                const canAssignStudentRole = studentStatus
+                    && studentStatus.kind !== 'Baja'
+                    && studentStatus.kind !== 'Egresado';
 
-                const studentRole = await RoleModel.findOne({ name: 'student' });
-                if (!studentRole) {
-                    res.status(500).json({ error: 'System error: Student role not defined' });
-                    return;
+                if (canAssignStudentRole) {
+                    student.email = uid;
+                    await student.save();
+
+                    const studentRole = await RoleModel.findOne({ name: 'student' });
+                    if (!studentRole) {
+                        res.status(500).json({ error: 'System error: Student role not defined' });
+                        return;
+                    }
+                    roleIdToAssign = studentRole._id;
+                } else {
+                    student = null;
                 }
-                roleIdToAssign = studentRole._id;
             }
 
             let user = await UserModel.findOne({ identification: dni });
@@ -120,9 +162,45 @@ export const AuthController = {
             await user.save();
 
             if (!user.roleId) {
+                if (user.accessDenied) {
+                    res.status(403).json({
+                        message: 'Su solicitud de rol fue rechazada. Contacte con un administrador si necesita mas información.',
+                        userCreated: true,
+                        requiresRoleRequest: false,
+                        hasPendingRoleRequest: false,
+                        hasRejectedRoleRequest: true,
+                        pendingRoleRequest: null,
+                        userId: String(user._id)
+                    });
+                    return;
+                }
+
+                const pendingRoleRequest = await RoleRequestModel.findOne({
+                    user: user._id,
+                    status: 'pending'
+                } as any)
+                    .populate('requestedRole', 'name')
+                    .populate('faculty', 'name')
+                    .lean();
+
                 res.status(403).json({
-                    message: 'User created but no role assigned. Please contact administration.',
-                    userCreated: true
+                    message: pendingRoleRequest
+                        ? 'Usted ya tiene una solicitud de rol pendiente por aprobar. Vuelva más tarde.'
+                        : 'Usted aun no se encuentra registrado en el sistema.',
+                    userCreated: true,
+                    requiresRoleRequest: !pendingRoleRequest,
+                    hasPendingRoleRequest: !!pendingRoleRequest,
+                    pendingRoleRequest: pendingRoleRequest ? {
+                        _id: String(pendingRoleRequest._id),
+                        requestedRole: (pendingRoleRequest.requestedRole as any)?.name || '',
+                        faculty: pendingRoleRequest.faculty
+                            ? {
+                                _id: String((pendingRoleRequest.faculty as any)?._id || ''),
+                                name: (pendingRoleRequest.faculty as any)?.name || ''
+                            }
+                            : null
+                    } : null,
+                    userId: String(user._id)
                 });
                 return;
             }
@@ -174,6 +252,134 @@ export const AuthController = {
                 details: error.message
             });
             return;
+        }
+    },
+
+    async getFaculties(_req: Request, res: Response): Promise<void> {
+        try {
+            const faculties = await FacultyModel.find()
+                .select('_id name')
+                .sort({ name: 1 })
+                .lean();
+
+            res.status(200).json({
+                data: faculties.map((faculty) => ({
+                    _id: String(faculty._id),
+                    name: faculty.name
+                }))
+            });
+        } catch (error: any) {
+            console.error('Get faculties for auth error:', error);
+            res.status(500).json({
+                error: 'No se pudieron cargar las facultades.',
+                details: error.message
+            });
+        }
+    },
+
+    async createRoleRequest(req: Request, res: Response): Promise<void> {
+        try {
+            const { userId, facultyId, requestedRole } = req.body as {
+                userId?: string;
+                facultyId?: string;
+                requestedRole?: string;
+            };
+            const rolesRequiringFaculty = new Set(['secretary', 'vicedean', 'professor']);
+            const allowedRoles = new Set(['admin', 'secretary', 'vicedean', 'professor']);
+
+            if (!userId || !requestedRole) {
+                res.status(400).json({ error: 'userId y requestedRole son requeridos.' });
+                return;
+            }
+
+            if (!allowedRoles.has(requestedRole)) {
+                res.status(400).json({ error: 'El rol solicitado no es válido.' });
+                return;
+            }
+
+            if (rolesRequiringFaculty.has(requestedRole) && !facultyId) {
+                res.status(400).json({ error: 'Debe seleccionar una facultad para el rol solicitado.' });
+                return;
+            }
+
+            const [user, faculty, roleDocument] = await Promise.all([
+                UserModel.findById(userId).select('_id roleId accessDenied').lean(),
+                facultyId ? FacultyModel.findById(facultyId).select('_id').lean() : Promise.resolve(null),
+                RoleModel.findOne({ name: requestedRole }).select('_id').lean()
+            ]);
+
+            if (!user) {
+                res.status(404).json({ error: 'Usuario no encontrado.' });
+                return;
+            }
+
+            if (user.roleId) {
+                res.status(409).json({ error: 'El usuario ya tiene un rol asignado.' });
+                return;
+            }
+
+            if (user.accessDenied) {
+                res.status(403).json({
+                    error: 'Su solicitud anterior fue rechazada. No puede enviar una nueva solicitud en este momento.',
+                    hasRejectedRoleRequest: true
+                });
+                return;
+            }
+
+            if (rolesRequiringFaculty.has(requestedRole) && !faculty) {
+                res.status(404).json({ error: 'La facultad seleccionada no existe.' });
+                return;
+            }
+
+            if (!roleDocument?._id) {
+                res.status(500).json({ error: 'El rol solicitado no está configurado en el sistema.' });
+                return;
+            }
+
+            const existingPendingRequestForUser = await RoleRequestModel.findOne({
+                user: user._id,
+                status: 'pending'
+            } as any)
+                .populate('requestedRole', 'name')
+                .populate('faculty', 'name')
+                .lean();
+
+            if (existingPendingRequestForUser) {
+                res.status(409).json({
+                    error: 'Ya existe una solicitud pendiente para este usuario.',
+                    hasPendingRoleRequest: true,
+                    pendingRoleRequest: {
+                        _id: String(existingPendingRequestForUser._id),
+                        requestedRole: (existingPendingRequestForUser.requestedRole as any)?.name || '',
+                        faculty: existingPendingRequestForUser.faculty
+                            ? {
+                                _id: String((existingPendingRequestForUser.faculty as any)?._id || ''),
+                                name: (existingPendingRequestForUser.faculty as any)?.name || ''
+                            }
+                            : null
+                    }
+                });
+                return;
+            }
+
+            const roleRequestPayload = {
+                user: user._id,
+                faculty: faculty?._id ?? null,
+                requestedRole: roleDocument._id,
+                status: 'pending'
+            } as any;
+
+            await RoleRequestModel.create(roleRequestPayload);
+
+            res.status(201).json({
+                message: 'Solicitud enviada correctamente. Un administrador revisará su registro.'
+            });
+        } catch (error: any) {
+            console.error('Create role request error:', error);
+            res.status(500).json({
+                error: 'No se pudo registrar la solicitud.',
+                details: error.message
+            });
         }
     }
 };

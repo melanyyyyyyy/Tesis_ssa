@@ -8,6 +8,8 @@ import {
     getRoleManagementUsers,
     updateFacultyAssignmentUser,
     updateRoleManagementUser,
+    approveRoleRequest,
+    rejectRoleRequest,
     deleteEvaluation,
     createEvaluation,
     updateEvaluation,
@@ -34,6 +36,8 @@ router.get('/faculty-assignment-users', getFacultyAssignmentUsers);
 router.put('/faculty-assignment-users/:id', updateFacultyAssignmentUser);
 router.get('/role-management-users', getRoleManagementUsers);
 router.put('/role-management-users/:id', updateRoleManagementUser);
+router.post('/role-requests/:requestId/approve', approveRoleRequest);
+router.post('/role-requests/:requestId/reject', rejectRoleRequest);
 router.get('/pending-grades-count', getPendingGradesCount);
 router.get('/pending-grades', getPendingGradesList);
 router.get('/last-export-grades', getLastExportGradesList);

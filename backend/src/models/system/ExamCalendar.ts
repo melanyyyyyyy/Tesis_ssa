@@ -51,7 +51,7 @@ ExamCalendarSchema.pre('save', async function (this: IExamCalendar) {
 
     if (careerConflict) {
         const dateStr = this.examDate.toISOString().slice(0, 10);
-        throw new Error(`Scheduling Conflict: Another exam is already scheduled for this career on ${dateStr}.`);
+        throw new Error(`Conflicto de horario: Ya existe otro examen programado para esta carrera el ${dateStr}.`);
     }
 });
 

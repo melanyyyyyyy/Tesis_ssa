@@ -6,9 +6,10 @@ export interface IUser extends Document {
   identification: string;
   firstName: string;
   lastName: string;
-  roleId?: Types.ObjectId;     
+  roleId: Types.ObjectId | null;
   studentId?: Types.ObjectId; 
   isActive: boolean;
+  accessDenied: boolean;
   createdAt: Date; 
   updatedAt: Date;      
 }
@@ -18,9 +19,10 @@ const UserSchema = new Schema<IUser>({
   identification: { type: String, required: true, unique: true },
   firstName: { type: String, required: true, trim: true },
   lastName: { type: String, required: true, trim: true },
-  roleId: { type: Schema.Types.ObjectId, ref: 'Role', required: false, index: true },
+  roleId: { type: Schema.Types.ObjectId, ref: 'Role', default: null, index: true },
   studentId: { type: Schema.Types.ObjectId, ref: 'Student' },
   isActive: { type: Boolean, default: true, index: true, },
+  accessDenied: { type: Boolean, default: false }
 }, { timestamps: true, versionKey: false, collection: 'users' });
 
 UserSchema.index({ email: 1 }, { unique: true, sparse: true });

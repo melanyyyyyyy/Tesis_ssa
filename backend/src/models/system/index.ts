@@ -6,6 +6,7 @@ export { default as MessageModel, type IMessage } from './Message.js';
 export { default as NotificationModel, type INotification } from './Notification.js';
 export { default as PendingDeletionModel, type IPendingDeletion } from './PendingDeletion.js';
 export { default as RoleModel, type IRole } from './Role.js';
+export { default as RoleRequestModel, type IRoleRequest } from './RoleRequest.js';
 export { default as UserModel, type IUser } from './User.js';
 export { default as VicedeanModel, type IVicedean } from './Vicedean.js';
 export { default as SecretaryModel, type ISecretary } from './Secretary.js';

@@ -43,6 +43,7 @@ export interface ReusableTableAction<T extends object> {
     icon?: React.ReactNode;
     color?: IconButtonProps['color'];
     disabled?: (row: T) => boolean;
+    hidden?: (row: T) => boolean;
 }
 
 interface ReusableTableProps<T extends object> {
@@ -369,6 +370,7 @@ const ReusableTable = <T extends object>({
                                                 <TableCell align="center">
                                                     <Stack direction="row" spacing={0.5} justifyContent="center">
                                                         {actions.map((action) => {
+                                                            if (action.hidden?.(row)) return null;
                                                             const variant = action.variant || 'custom';
                                                             const actionColor = action.color || getDefaultActionColor(variant);
                                                             return (
