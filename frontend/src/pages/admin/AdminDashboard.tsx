@@ -47,14 +47,14 @@ const AdminDashboard: React.FC = () => {
             description: 'Administrar privilegios de acceso (profesor, vicedecano, secretario, administrador).',
             icon: <ManageAccountsIcon />,
             path: '/admin/role-management',
-            color: theme.palette.info.main
+            color: theme.palette.warning.main
         },
         {
             title: 'Asignación de Facultades',
             description: 'Vincular a los secretarios y vicedecanos con su facultad correspondiente.',
             icon: <DomainIcon />,
             path: '/admin/faculty-assignment',
-            color: theme.palette.warning.main
+            color: theme.palette.primary.light
         },
 
     ];

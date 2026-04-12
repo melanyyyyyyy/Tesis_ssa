@@ -754,7 +754,18 @@ export async function getMatriculatedSubjects(req: Request, res: Response) {
 
         const [matriculatedSubjects, totalCount] = await Promise.all([
             MatriculatedSubjectModel.find(filter)
-                .populate('subjectId', 'name')
+                .populate({
+                    path: 'subjectId',
+                    select: 'name careerId',
+                    populate: {
+                        path: 'careerId',
+                        select: 'name facultyId courseTypeId',
+                        populate: [
+                            { path: 'facultyId', select: 'name' },
+                            { path: 'courseTypeId', select: 'name' }
+                        ]
+                    }
+                })
                 .populate('studentId', 'firstName lastName')
                 .skip(skip)
                 .limit(limit)
@@ -775,6 +786,9 @@ export async function getMatriculatedSubjects(req: Request, res: Response) {
                 return {
                     ...subject,
                     subjectName: (subject.subjectId as any)?.name || '',
+                    facultyName: ((subject.subjectId as any)?.careerId as any)?.facultyId?.name || '',
+                    courseTypeName: ((subject.subjectId as any)?.careerId as any)?.courseTypeId?.name || '',
+                    careerName: ((subject.subjectId as any)?.careerId as any)?.name || '',
                     studentName: `${(subject.studentId as any)?.firstName || ''} ${(subject.studentId as any)?.lastName || ''}`.trim(),
                     evaluation: evaluation ?
                         `${(evaluation.evaluationValueId as any)?.value || ''} - ${(evaluation.examinationTypeId as any)?.name || ''}` :
@@ -930,7 +944,14 @@ export async function getStudents(req: Request, res: Response) {
 
         const [students, totalCount] = await Promise.all([
             StudentModel.find(filter)
-                .populate('careerId', 'name')
+                .populate({
+                    path: 'careerId',
+                    select: 'name facultyId',
+                    populate: {
+                        path: 'facultyId',
+                        select: 'name'
+                    }
+                })
                 .populate('courseTypeId', 'name')
                 .populate('studentStatusId', 'kind')
                 .skip(skip)
@@ -941,6 +962,7 @@ export async function getStudents(req: Request, res: Response) {
 
         const studentsWithNames = students.map(student => ({
             ...student,
+            facultyName: ((student.careerId as any)?.facultyId as any)?.name || '',
             careerName: (student.careerId as any)?.name || '',
             courseTypeName: (student.courseTypeId as any)?.name || '',
             studentStatusType: (student.studentStatusId as any)?.kind || ''
@@ -1013,7 +1035,22 @@ export async function getEvaluations(req: Request, res: Response) {
         const [evaluations, totalCount] = await Promise.all([
             EvaluationModel.find()
                 .populate('studentId', 'firstName lastName')
-                .populate('matriculatedSubjectId')
+                .populate({
+                    path: 'matriculatedSubjectId',
+                    select: 'subjectId academicYear',
+                    populate: {
+                        path: 'subjectId',
+                        select: 'name careerId',
+                        populate: {
+                            path: 'careerId',
+                            select: 'name facultyId courseTypeId',
+                            populate: [
+                                { path: 'facultyId', select: 'name' },
+                                { path: 'courseTypeId', select: 'name' }
+                            ]
+                        }
+                    }
+                })
                 .populate('evaluationValueId', 'value')
                 .populate('examinationTypeId', 'name')
                 .skip(skip)
@@ -1025,16 +1062,17 @@ export async function getEvaluations(req: Request, res: Response) {
         const evaluationsWithNames = await Promise.all(
             evaluations.map(async (evaluation) => {
                 const matriculatedSubject = evaluation.matriculatedSubjectId as any;
-                let subjectName = '';
-                if (matriculatedSubject?.subjectId) {
-                    const subject = await SubjectModel.findById(matriculatedSubject.subjectId).select('name').lean();
-                    subjectName = subject?.name || '';
-                }
+                const subject = matriculatedSubject?.subjectId as any;
+                const career = subject?.careerId as any;
 
                 return {
                     ...evaluation,
                     studentName: `${(evaluation.studentId as any)?.firstName || ''} ${(evaluation.studentId as any)?.lastName || ''}`.trim(),
-                    matriculatedSubjectName: subjectName,
+                    facultyName: career?.facultyId?.name || '',
+                    courseTypeName: career?.courseTypeId?.name || '',
+                    careerName: career?.name || '',
+                    academicYear: matriculatedSubject?.academicYear || '',
+                    matriculatedSubjectName: subject?.name || '',
                     evaluationValue: (evaluation.evaluationValueId as any)?.value || '',
                     examinationTypeName: (evaluation.examinationTypeId as any)?.name || ''
                 };
@@ -1061,7 +1099,14 @@ export async function getSubjects(req: Request, res: Response) {
 
         const [subjects, totalCount] = await Promise.all([
             SubjectModel.find()
-                .populate('careerId', 'name')
+                .populate({
+                    path: 'careerId',
+                    select: 'name facultyId courseTypeId',
+                    populate: [
+                        { path: 'facultyId', select: 'name' },
+                        { path: 'courseTypeId', select: 'name' }
+                    ]
+                })
                 .skip(skip)
                 .limit(limit)
                 .lean(),
@@ -1070,6 +1115,8 @@ export async function getSubjects(req: Request, res: Response) {
 
         const subjectsWithCareerNames = subjects.map(subject => ({
             ...subject,
+            facultyName: ((subject.careerId as any)?.facultyId as any)?.name || '',
+            courseTypeName: ((subject.careerId as any)?.courseTypeId as any)?.name || '',
             careerName: (subject.careerId as any)?.name || ''
         }));
 

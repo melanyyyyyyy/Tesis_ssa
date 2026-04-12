@@ -47,6 +47,10 @@ const tableConfigs: Record<string, TableConfig> = {
         apiEndpoint: '/admin/evaluations',
         columns: [
             { field: 'studentName', headerName: 'Nombre del Estudiante' },
+            { field: 'facultyName', headerName: 'Facultad' },
+            { field: 'courseTypeName', headerName: 'Tipo de Curso' },
+            { field: 'careerName', headerName: 'Carrera' },
+            { field: 'academicYear', headerName: 'Año Académico' },
             { field: 'matriculatedSubjectName', headerName: 'Asignatura Matriculada' },
             { field: 'evaluationValue', headerName: 'Valor de la Evaluación' },
             { field: 'examinationTypeName', headerName: 'Tipo de Examen' },
@@ -88,8 +92,11 @@ const tableConfigs: Record<string, TableConfig> = {
         apiEndpoint: '/admin/matriculated-subjects',
         columns: [
             { field: 'studentName', headerName: 'Nombre del Estudiante' },
-            { field: 'subjectName', headerName: 'Nombre de la Asignatura' },
+            { field: 'facultyName', headerName: 'Facultad' },
+            { field: 'courseTypeName', headerName: 'Tipo de Curso' },
+            { field: 'careerName', headerName: 'Carrera' },
             { field: 'academicYear', headerName: 'Año Académico' },
+            { field: 'subjectName', headerName: 'Nombre de la Asignatura' },
             { 
                 field: 'evaluated', 
                 headerName: 'Evaluada',
@@ -112,8 +119,9 @@ const tableConfigs: Record<string, TableConfig> = {
             { field: 'lastName', headerName: 'Apellidos' },
             { field: 'identification', headerName: 'Identificación' },
             { field: 'email', headerName: 'Email' },
-            { field: 'careerName', headerName: 'Carrera' },
+            { field: 'facultyName', headerName: 'Facultad' },
             { field: 'courseTypeName', headerName: 'Tipo de Curso' },
+            { field: 'careerName', headerName: 'Carrera' },
             { field: 'academicYear', headerName: 'Año Académico' },
             { field: 'studentStatusType', headerName: 'Estado del Estudiante' }
         ]
@@ -130,6 +138,8 @@ const tableConfigs: Record<string, TableConfig> = {
         apiEndpoint: '/admin/subjects',
         columns: [
             { field: 'name', headerName: 'Nombre de la Asignatura' },
+            { field: 'facultyName', headerName: 'Facultad' },
+            { field: 'courseTypeName', headerName: 'Tipo de Curso' },
             { field: 'careerName', headerName: 'Carrera' },
             { field: 'academicYear', headerName: 'Año Académico' }
         ]

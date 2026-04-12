@@ -5,6 +5,8 @@ import LoginPage from '../pages/auth/LoginPage';
 
 import SecretaryDashboard from '../pages/secretary/SecretaryDashboard';
 import ExamCalendarPage from '../pages/secretary/ExamCalendarPage';
+import SecretarySigenuTablesPage from '../pages/secretary/SigenuTablesPage';
+import SecretarySigenuTableDetailPage from '../pages/secretary/SigenuTableDetailPage';
 
 import AdminDashboard from '../pages/admin/AdminDashboard';
 import SigenuImportPage from '../pages/admin/SigenuImportPage';
@@ -92,6 +94,8 @@ export default function AppRouter() {
         <Route element={<ProtectedRoute allowedRoles={['secretary']} />}>
           <Route path="/" element={<Navigate to="/secretary/dashboard" replace />} />
           <Route path="/secretary/dashboard" element={<SecretaryDashboard />} />
+          <Route path="/secretary/sigenu-tables" element={<SecretarySigenuTablesPage />} />
+          <Route path="/secretary/sigenu/:tableType" element={<SecretarySigenuTableDetailPage />} />
           <Route path="/secretary/exams" element={<ExamCalendarPage />} />
         </Route>
 

@@ -62,7 +62,7 @@ const SecretaryDashboard: React.FC = () => {
             title: 'Reportes del SIGENU',
             description: 'Visualizar los datos de la facultad y exportar tablas en formato PDF.',
             icon: <PictureAsPdfIcon />,
-            path: '/secretary/sigenu-tables',  /////
+            path: '/secretary/sigenu-tables',  
             color: theme.palette.secondary.main
         },
         {

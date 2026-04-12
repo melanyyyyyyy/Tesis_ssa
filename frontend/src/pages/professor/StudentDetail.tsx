@@ -193,7 +193,8 @@ const StudentDetail: React.FC = () => {
         {
             field: 'justified',
             headerName: 'Justificado',
-            renderCell: (value) => {
+            renderCell: (value, row) => {
+                if (row.isPresent === true) return '-';
                 if (typeof value !== 'boolean') return '-';
                 return value ? 'Sí' : 'No';
             }
@@ -395,12 +396,20 @@ const StudentDetail: React.FC = () => {
         );
     }
 
+    const attendanceLabel = (typeof detail.studentSummary.attendanceAverage === 'number')
+        ? `Promedio de asistencia: ${detail.studentSummary.attendanceAverage.toFixed(2)}%`
+        : 'Sin registros de asistencia';
+
+    const evaluationLabel = (typeof detail.studentSummary.evaluationAverage === 'number')
+        ? `Promedio de evaluación: ${detail.studentSummary.evaluationAverage.toFixed(2)}`
+        : 'Sin registros de evaluación';
+
     return (
         <MainLayout>
             <Container maxWidth="xl" sx={{ py: 4 }}>
                 <PageHeader
                     title={`Detalles de ${detail.studentSummary.studentName} en la asignatura ${detail.subject.name}`}
-                    subtitle={`Promedio de asistencia: ${detail.studentSummary.attendanceAverage.toFixed(2)}% | Promedio de evaluación: ${detail.studentSummary.evaluationAverage.toFixed(2)}`}
+                    subtitle={`${attendanceLabel} | ${evaluationLabel}`}
                     showBackButton={true}
                     backTo="/professor/subject-detail"
                     action={(

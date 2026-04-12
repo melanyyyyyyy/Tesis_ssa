@@ -179,6 +179,23 @@ const ReusableTable = <T extends object>({
         return params.toString();
     }, [page, queryParams, rowsPerPage, serverPagination]);
 
+    const serializedBaseQueryParams = useMemo(() => {
+        const params = new URLSearchParams();
+        if (queryParams) {
+            Object.entries(queryParams).forEach(([key, value]) => {
+                if (value === undefined || value === null || value === '') {
+                    return;
+                }
+                params.set(key, String(value));
+            });
+        }
+        return params.toString();
+    }, [queryParams]);
+
+    useEffect(() => {
+        setPage(0);
+    }, [serializedBaseQueryParams]);
+
     useEffect(() => {
         const abortController = new AbortController();
 
