@@ -36,6 +36,7 @@ import NotificationPage from '../pages/common/NotificationPage';
 
 import VicedeanDashboard from '../pages/vicedean/VicedeanDashboard';
 import TeachingAssignmentsPage from '../pages/vicedean/TeachingAssignmentsPage';
+import ProfessorRequestsPage from '../pages/vicedean/ProfessorRequestsPage';
 
 const ProtectedRoute = ({ allowedRoles }: { allowedRoles?: string[] }) => {
   const { isAuthenticated, isLoading, user } = useAuth();
@@ -116,6 +117,7 @@ export default function AppRouter() {
         <Route element={<ProtectedRoute allowedRoles={['vicedean']} />}>
           <Route path="/vicedean/dashboard" element={<VicedeanDashboard />} />
           <Route path="/vicedean/teaching-assignments" element={<TeachingAssignmentsPage />} />
+          <Route path="/vicedean/professor-requests" element={<ProfessorRequestsPage />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/login" replace />} />

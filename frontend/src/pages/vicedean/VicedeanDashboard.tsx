@@ -12,10 +12,9 @@ import {
     Avatar,
     Skeleton
 } from '@mui/material';
-import {
-    AssignmentInd as AssignmentIndIcon,
-    ArrowForward as ArrowIcon
-} from '@mui/icons-material';
+import AssignmentIndIcon from '@mui/icons-material/AssignmentInd';
+import ArrowIcon from '@mui/icons-material/ArrowForward';
+import HowToRegIcon from '@mui/icons-material/HowToReg'; 
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import MainLayout from '../../layouts/MainLayout';
@@ -74,7 +73,15 @@ const VicedeanDashboard: React.FC = () => {
             icon: <AssignmentIndIcon />,
             path: '/vicedean/teaching-assignments',
             color: theme.palette.secondary.main
-        }
+        },
+        {
+            title: 'Solicitudes de Profesores',
+            description: 'Aprobar nuevos registros y asignar asignaturas iniciales al claustro.',
+            icon: <HowToRegIcon />,
+            path: '/vicedean/professor-requests',
+            color: theme.palette.primary.main
+        },
+
     ]
 
     return (
@@ -82,8 +89,8 @@ const VicedeanDashboard: React.FC = () => {
             <Container maxWidth="xl" sx={{ py: 4 }}>
                 <PageHeader
                     title="Panel de Vicedecano"
-                    subtitle={loading ? 
-                        <Skeleton width={300} height={24} /> : 
+                    subtitle={loading ?
+                        <Skeleton width={300} height={24} /> :
                         `Bienvenido, ${user?.firstName || 'Usuario'}. Seleccione una opción para comenzar.`
                     }
                 />

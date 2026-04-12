@@ -2,19 +2,152 @@ import { Request, Response } from 'express';
 import Career from '../models/sigenu/Career.js';
 import CourseType from '../models/sigenu/CourseType.js';
 import Subject from '../models/sigenu/Subject.js';
-import Role from '../models/system/Role.js';
-import User from '../models/system/User.js';
-import Vicedean from '../models/system/Vicedean.js';
+import {
+  RoleModel,
+  RoleRequestModel,
+  UserModel,
+  VicedeanModel
+} from '../models/system/index.js';
 
 const getVicedeanRecord = async (userId: string) => {
-  return Vicedean.findOne({ userId }).populate('facultyId', 'name').lean();
+  return VicedeanModel.findOne({ userId }).populate('facultyId', 'name').lean();
 };
 
-const getFacultyIdFromVicedean = (vicedean: Awaited<ReturnType<typeof getVicedeanRecord>>) => {
+const getFacultyIdFromVicedean = (vicedean: any) => {
   const facultyField = vicedean?.facultyId as { _id?: { toString(): string } } | string | undefined;
   if (!facultyField) return null;
   if (typeof facultyField === 'string') return facultyField;
-  return facultyField._id?.toString() || null;
+  return (facultyField as any)._id?.toString() || null;
+};
+
+export const getProfessorRequests = async (req: Request, res: Response) => {
+  try {
+    const userId = req.user?.id || req.user?._id;
+    const vicedean = await getVicedeanRecord(userId);
+    if (!vicedean) return res.status(404).json({ message: 'Vicedecano no encontrado' });
+
+    const facultyId = getFacultyIdFromVicedean(vicedean);
+    const professorRole = await RoleModel.findOne({ name: 'professor' }).lean();
+    if (!professorRole) return res.status(404).json({ message: 'Rol de profesor no encontrado' });
+
+    const statusParam = req.query.status as string || 'all';
+
+    // 1. Get pending requests for this faculty and professor role
+    const pendingRequests = await RoleRequestModel.find({
+      faculty: facultyId,
+      requestedRole: professorRole._id,
+      status: 'pending'
+    }).populate('user', 'firstName lastName email accessDenied').lean();
+
+    const pendingUserIds = pendingRequests.map(r => (r.user as any)._id.toString());
+
+    // 2. Get users who ALREADY HAVE the professor role in this faculty (Approved)
+    // For professors, we check if they are assigned to ANY subject in this faculty
+    const facultyCareers = await Career.find({ facultyId }).select('_id').lean();
+    const careerIds = facultyCareers.map(c => c._id);
+    
+    const subjectsInFaculty = await Subject.find({ careerId: { $in: careerIds }, professorId: { $ne: null } })
+      .select('professorId')
+      .lean();
+    const approvedUserIds = [...new Set(subjectsInFaculty.map(s => s.professorId?.toString()))].filter(Boolean);
+
+    // 3. Get users with accessDenied = true who attempted professor role in this faculty
+    // This is tricky since we delete the request on rejection. 
+    // For now, we'll show all users with accessDenied=true as "denied" if they don't have a role.
+    const allUsers = await UserModel.find({
+      $or: [
+        { _id: { $in: pendingUserIds } },
+        { _id: { $in: approvedUserIds } },
+        { accessDenied: true, roleId: null }
+      ]
+    }).select('firstName lastName email accessDenied roleId').populate('roleId', 'name').lean();
+
+    const data = allUsers.map(user => {
+      const isPending = pendingUserIds.includes(user._id.toString());
+      const isApproved = approvedUserIds.includes(user._id.toString());
+      const isDenied = !!user.accessDenied;
+      const request = pendingRequests.find(r => (r.user as any)._id.toString() === user._id.toString());
+
+      return {
+        _id: user._id,
+        requestId: request?._id || null,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        fullName: `${user.firstName} ${user.lastName}`.trim(),
+        email: user.email || '',
+        accessDenied: isDenied,
+        isPendingApproval: isPending,
+        status: isPending ? 'pending' : (isApproved ? 'approved' : (isDenied ? 'denied' : 'unknown'))
+      };
+    });
+
+    let filteredData = data;
+    if (statusParam === 'pending') filteredData = data.filter(d => d.isPendingApproval);
+    else if (statusParam === 'approved') filteredData = data.filter(d => d.status === 'approved');
+    else if (statusParam === 'denied') filteredData = data.filter(d => d.status === 'denied');
+
+    return res.status(200).json({ data: filteredData, totalCount: filteredData.length });
+  } catch (error) {
+    console.error('Error in getProfessorRequests:', error);
+    return res.status(500).json({ message: 'Error al obtener solicitudes' });
+  }
+};
+
+export const approveProfessorRequest = async (req: Request, res: Response) => {
+  try {
+    const { userId: targetUserId } = req.params;
+    const { subjectId } = req.body;
+
+    if (!subjectId) return res.status(400).json({ message: 'Asignatura requerida' });
+
+    const professorRole = await RoleModel.findOne({ name: 'professor' }).lean();
+    const user = await UserModel.findById(targetUserId);
+    if (!user) return res.status(404).json({ message: 'Usuario no encontrado' });
+
+    // 1. Assign role and reset accessDenied
+    user.roleId = professorRole?._id as any;
+    user.accessDenied = false;
+    await user.save();
+
+    // 2. Assign to subject
+    await Subject.findByIdAndUpdate(subjectId, { professorId: targetUserId });
+
+    // 3. Mark request as reviewed if exists
+    await RoleRequestModel.findOneAndUpdate(
+      { user: targetUserId as any, requestedRole: professorRole?._id, status: 'pending' },
+      { status: 'reviewed' }
+    );
+
+    return res.status(200).json({ message: 'Profesor aprobado y asignado correctamente' });
+  } catch (error) {
+    console.error('Error in approveProfessorRequest:', error);
+    return res.status(500).json({ message: 'Error al aprobar profesor' });
+  }
+};
+
+export const rejectProfessorRequest = async (req: Request, res: Response) => {
+  try {
+    const { userId: targetUserId } = req.params;
+    const professorRole = await RoleModel.findOne({ name: 'professor' }).lean();
+
+    // 1. Set accessDenied = true
+    await UserModel.findByIdAndUpdate(targetUserId, { accessDenied: true, roleId: null });
+
+    // 2. Delete request
+    await RoleRequestModel.findOneAndDelete({
+      user: targetUserId as any,
+      requestedRole: professorRole?._id,
+      status: 'pending'
+    });
+
+    // 3. Remove from any subjects
+    await Subject.updateMany({ professorId: targetUserId }, { $set: { professorId: null } });
+
+    return res.status(200).json({ message: 'Solicitud rechazada correctamente' });
+  } catch (error) {
+    console.error('Error in rejectProfessorRequest:', error);
+    return res.status(500).json({ message: 'Error al rechazar solicitud' });
+  }
 };
 
 export const getVicedeanProfile = async (req: Request, res: Response) => {
@@ -216,12 +349,12 @@ export const getVicedeanProfessors = async (req: Request, res: Response) => {
       return res.status(404).json({ message: 'Vicedecano no encontrado' });
     }
 
-    const professorRole = await Role.findOne({ name: 'professor' }).select('_id').lean();
+    const professorRole = await RoleModel.findOne({ name: 'professor' }).select('_id').lean();
     if (!professorRole) {
       return res.status(404).json({ message: 'Rol de profesor no encontrado' });
     }
 
-    const professors = await User.find({
+    const professors = await UserModel.find({
       roleId: professorRole._id,
       isActive: true
     })
@@ -230,7 +363,7 @@ export const getVicedeanProfessors = async (req: Request, res: Response) => {
       .lean();
 
     return res.status(200).json({
-      data: professors.map((professor) => ({
+      data: professors.map((professor: { _id: unknown; firstName: string; lastName: string }) => ({
         _id: professor._id,
         firstName: professor.firstName,
         lastName: professor.lastName
@@ -282,12 +415,12 @@ export const assignProfessorToSubject = async (req: Request, res: Response) => {
       return res.status(403).json({ message: 'No tienes permisos para modificar esta asignatura' });
     }
 
-    const professorRole = await Role.findOne({ name: 'professor' }).select('_id').lean();
+    const professorRole = await RoleModel.findOne({ name: 'professor' }).select('_id').lean();
     if (!professorRole) {
       return res.status(404).json({ message: 'Rol de profesor no encontrado' });
     }
 
-    const professor = await User.findOne({
+    const professor = await UserModel.findOne({
       _id: professorId,
       roleId: professorRole._id,
       isActive: true

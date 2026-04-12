@@ -6,7 +6,10 @@ import {
   getVicedeanCourseTypes,
   getVicedeanProfile,
   getVicedeanProfessors,
-  getVicedeanSubjects
+  getVicedeanSubjects,
+  getProfessorRequests,
+  approveProfessorRequest,
+  rejectProfessorRequest
 } from '../controllers/vicedean.controller.js';
 
 const router = Router();
@@ -19,5 +22,10 @@ router.get('/careers', getVicedeanCareers);
 router.get('/professors', getVicedeanProfessors);
 router.get('/subjects', getVicedeanSubjects);
 router.put('/subjects/:subjectId/professor', assignProfessorToSubject);
+
+// Professor Requests
+router.get('/professor-requests', getProfessorRequests);
+router.post('/professor-requests/:userId/approve', approveProfessorRequest);
+router.post('/professor-requests/:userId/reject', rejectProfessorRequest);
 
 export default router;

@@ -1,5 +1,5 @@
 import { Schema, model, Document, Types } from 'mongoose';
-import { UserModel } from '../system/index.js';
+import { NotificationModel, UserModel } from '../system/index.js';
 
 export interface ISubject extends Document {
     _id: Types.ObjectId;
@@ -9,6 +9,16 @@ export interface ISubject extends Document {
     academicYear: number;
     professorId?: Types.ObjectId;
 }
+
+const notifyProfessorAssignment = async (professorId: Types.ObjectId | string, subjectName: string) => {
+    await NotificationModel.create({
+        recipientId: professorId,
+        title: 'Nueva asignatura asignada',
+        message: `Se te ha asignado la asignatura "${subjectName}".`,
+        type: 'INFO',
+        link: '/professor/dashboard'
+    });
+};
 
 const SubjectSchema = new Schema<ISubject>(
     {
@@ -73,6 +83,36 @@ SubjectSchema.pre('save', async function (this: ISubject) {
         const role = user.roleId as any;
         if (role.name !== 'PROFESSOR') throw new Error('The assigned user must have the PROFESSOR role.');
     }
+});
+
+SubjectSchema.post('save', async function (doc: ISubject) {
+    if (!doc.professorId || !doc.isModified('professorId')) {
+        return;
+    }
+
+    await notifyProfessorAssignment(doc.professorId, doc.name);
+});
+
+SubjectSchema.pre('findOneAndUpdate', async function () {
+    const currentSubject = await this.model.findOne(this.getQuery()).select('_id name professorId').lean();
+    (this as any)._currentSubject = currentSubject;
+});
+
+SubjectSchema.post('findOneAndUpdate', async function (doc) {
+    const currentSubject = (this as any)._currentSubject as { name?: string; professorId?: Types.ObjectId | string | null } | null;
+    const update = this.getUpdate() as {
+        professorId?: Types.ObjectId | string | null;
+        $set?: { professorId?: Types.ObjectId | string | null };
+    } | null;
+
+    const nextProfessorId = update?.$set?.professorId ?? update?.professorId;
+    const previousProfessorId = currentSubject?.professorId ? String(currentSubject.professorId) : null;
+
+    if (!doc || !nextProfessorId || previousProfessorId === String(nextProfessorId)) {
+        return;
+    }
+
+    await notifyProfessorAssignment(nextProfessorId, doc.name);
 });
 
 export default model<ISubject>('Subject', SubjectSchema);
