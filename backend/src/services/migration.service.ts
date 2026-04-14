@@ -73,7 +73,13 @@ export const MigrationService = {
     async migrateCourseTypes() {
         console.log('Migrating Course Types...');
 
-        const rows = await DatabaseService.getRows('SELECT id_course_type, name FROM public.course_type');
+        const rows = await DatabaseService.getRows(`
+        SELECT 
+            id_course_type, 
+            name 
+        FROM public.course_type 
+        WHERE name IN ('Curso Diurno', 'Curso por Encuentros');
+        `);
         const bulkOps = rows.map(row => ({
             updateOne: {
                 filter: { sigenId: row.id_course_type.toString() },
@@ -180,9 +186,12 @@ export const MigrationService = {
             ON s.career_fk = c.id_career
         JOIN public.student_status ss 
             ON s.student_status_fk = ss.id_student_status
+        JOIN public.course_type ct
+            ON c.course_type_fk = ct.id_course_type
         WHERE c.cancelled = false
             AND c.faculty_fk IS NOT NULL
             AND ss.kind = 'Activo' 
+            AND ct.name IN ('Curso Diurno', 'Curso por Encuentros')
         ORDER BY nc.name, c.faculty_fk, c.course_type_fk, c.id_career;
     `);
 
@@ -249,7 +258,7 @@ export const MigrationService = {
         const seenIdentifications = new Set();
 
         const rows = await DatabaseService.getRows(`
-        SELECT
+            SELECT
         s.id_student                                    AS id_student,
         s.name                                          AS first_name,
         CONCAT_WS(' ', s.middle_name, s.last_name)       AS last_name,
@@ -259,23 +268,26 @@ export const MigrationService = {
         s.course_type_fk,
         s.student_status_fk,
         MAX(sub.year)                                   AS academic_year
-        FROM public.student s
-        JOIN public.matriculated_subject ms
+    FROM public.student s
+    JOIN public.matriculated_subject ms
         ON ms.student_fk = s.id_student
         AND ms.cancelled = false
-        LEFT JOIN public.subject sub
+    LEFT JOIN public.subject sub
         ON ms.subject_fk = sub.subject_id
-        JOIN public.career c
+    JOIN public.career c
         ON s.career_fk = c.id_career
-        WHERE s.student_status_fk IN ('02','03','04')
+    JOIN public.course_type ct
+        ON s.course_type_fk = ct.id_course_type
+    WHERE s.student_status_fk IN ('02','03','04')
         AND c.faculty_fk IS NOT NULL
-        GROUP BY
+        AND ct.name IN ('Curso Diurno', 'Curso por Encuentros')
+    GROUP BY
         s.id_student, s.name, s.middle_name, s.last_name, 
         s.identification, s.email, s.career_fk, 
         s.course_type_fk, s.student_status_fk
-        HAVING MAX(sub.year) IS NOT NULL 
-        AND MAX(sub.year) <> 0
-        ORDER BY s.id_student;
+    HAVING MAX(sub.year) IS NOT NULL 
+    AND MAX(sub.year) <> 0
+    ORDER BY s.id_student;
     `);
 
         let studentBulkOps = [];
@@ -369,22 +381,31 @@ export const MigrationService = {
         const careerMap = new Map(careers.map(c => [c.sigenId, c._id]));
 
         const rows = await DatabaseService.getRows(`
-        SELECT
+        SELECT DISTINCT
             s.subject_id           AS subject_id,
             sn.name                AS name,
             d.career_fk            AS career_fk,
             s.year                 AS academic_year
         FROM public.subject s
         LEFT JOIN public.subject_name sn
-        ON s.subject_name_fk = sn.subject_name_id
+            ON s.subject_name_fk = sn.subject_name_id
         LEFT JOIN public.discipline d
-        ON s.discipline_fk = d.discipline_id
+            ON s.discipline_fk = d.discipline_id
         JOIN public.career c
-        ON d.career_fk = c.id_career
-        WHERE s.cancelled = false
-        AND s.year BETWEEN 1 AND 6
-        AND d.career_fk IS NOT NULL
-        AND c.faculty_fk IS NOT NULL;
+            ON d.career_fk = c.id_career
+        JOIN public.matriculated_subject ms
+            ON ms.subject_fk = s.subject_id
+        JOIN public.student stu
+            ON ms.student_fk = stu.id_student
+        JOIN public.course_type ct
+            ON stu.course_type_fk = ct.id_course_type
+        WHERE s.cancelled = false               
+            AND ms.cancelled = false            
+            AND s.year BETWEEN 1 AND 6          
+            AND d.career_fk IS NOT NULL         
+            AND c.faculty_fk IS NOT NULL        
+            AND stu.student_status_fk IN ('02','03','04') 
+            AND ct.name IN ('Curso Diurno', 'Curso por Encuentros');
     `);
 
         let bulkOps = [];
@@ -452,20 +473,25 @@ export const MigrationService = {
 
         const rows = await DatabaseService.getRows(`
         SELECT DISTINCT ON (ms.student_fk, ms.subject_fk)
-        ms.matriculated_subject_id,
-        ms.student_fk,
-        ms.subject_fk,
-        sub.year             AS academic_year,
-        ms.evaluated
+            ms.matriculated_subject_id,
+            ms.student_fk,
+            ms.subject_fk,
+            sub.year             AS academic_year,
+            ms.evaluated
         FROM public.matriculated_subject ms
         JOIN public.student s
-        ON ms.student_fk = s.id_student
+            ON ms.student_fk = s.id_student
         JOIN public.subject sub
-        ON ms.subject_fk = sub.subject_id
+            ON ms.subject_fk = sub.subject_id
+        JOIN public.career c
+            ON s.career_fk = c.id_career
+        JOIN public.course_type ct
+            ON c.course_type_fk = ct.id_course_type
         WHERE s.student_status_fk IN ('02','03','04')
-        AND sub.cancelled = false
-        AND ms.cancelled = false
-        AND sub.year BETWEEN 1 AND 6
+            AND sub.cancelled = false
+            AND ms.cancelled = false
+            AND sub.year BETWEEN 1 AND 6
+            AND ct.name IN ('Curso Diurno', 'Curso por Encuentros')
         ORDER BY ms.student_fk, ms.subject_fk, ms.matriculated_subject_id;
     `);
 
@@ -537,10 +563,32 @@ export const MigrationService = {
         const valueMap = new Map(values.map(v => [v.sigenId, v._id]));
 
         const rows = await DatabaseService.getRows(`
-        SELECT id_evaluation, student_fk, matriculated_subject_fk, 
-               evaluation_value_fk, examination_type_fk, 
-               evaluation_date, registration_date  
-        FROM public.evaluation
+        SELECT 
+            e.id_evaluation, 
+            e.student_fk, 
+            e.matriculated_subject_fk, 
+            e.evaluation_value_fk, 
+            e.examination_type_fk, 
+            e.evaluation_date, 
+            e.registration_date
+        FROM public.evaluation e
+        JOIN public.student s 
+            ON e.student_fk = s.id_student
+        JOIN public.matriculated_subject ms 
+            ON e.matriculated_subject_fk = ms.matriculated_subject_id
+        JOIN public.subject sub 
+            ON ms.subject_fk = sub.subject_id
+        JOIN public.career c 
+            ON s.career_fk = c.id_career
+        JOIN public.course_type ct 
+            ON c.course_type_fk = ct.id_course_type
+        WHERE 
+            s.student_status_fk IN ('02','03','04')
+            AND sub.cancelled = false
+            AND sub.year BETWEEN 1 AND 6
+            AND ct.name IN ('Curso Diurno', 'Curso por Encuentros')
+            AND e.cancelled = false
+            AND ms.cancelled = false;
     `);
 
         let bulkOps = [];

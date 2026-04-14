@@ -17,8 +17,6 @@ export const authMiddleware = (req: Request, res: Response, next: NextFunction):
             token = req.query.token as string;
         }
 
-        console.log(`[Auth] ${req.method} ${req.path}${req.query.backupFile ? ` - backupFile: ${req.query.backupFile}` : ''}`);
-
         if (!token) {
             console.warn(`[Auth] Missing token for ${req.method} ${req.path}`);
             res.status(401).json({ error: 'Authentication required. No token provided.' });
@@ -30,7 +28,6 @@ export const authMiddleware = (req: Request, res: Response, next: NextFunction):
             process.env.JWT_SECRET || 'secret_key_change_me'
         );
         
-        console.log(`[Auth] Token verified for user`);
         req.user = decoded;
         next();
     } catch (error) {

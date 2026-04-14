@@ -7,3 +7,4 @@ export { default as commonRouter } from './common.routes.js';
 export { default as professorRouter } from './professor.routes.js';
 export { default as vicedeanRouter } from './vicedean.routes.js';
 export { default as secretaryRouter } from './secretary.routes.js';
+export { default as studentRouter } from './student.routes.js';

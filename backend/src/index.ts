@@ -4,7 +4,18 @@ import dotenv from "dotenv";
 import cors from "cors";
 import { Server } from "socket.io";
 import { connectDatabase } from "./config/database.js";
-import { sigenuRouter, authRouter, adminRouter, notificationRouter, commonRouter, professorRouter, chatRouter, vicedeanRouter, secretaryRouter } from "./routes/index.js";
+import { 
+  sigenuRouter, 
+  authRouter, 
+  adminRouter, 
+  notificationRouter, 
+  commonRouter, 
+  professorRouter, 
+  chatRouter, 
+  vicedeanRouter, 
+  secretaryRouter, 
+  studentRouter 
+} from "./routes/index.js";
 import { ENV } from "./config/envs.js";
 import { setChatSocketServer } from "./services/chat.service.js";
 
@@ -35,6 +46,7 @@ app.use('/api/admin', adminRouter);
 app.use('/api/professor', professorRouter);
 app.use('/api/vicedean', vicedeanRouter);
 app.use('/api/secretary', secretaryRouter);
+app.use('/api/student', studentRouter);
 
 app.use((req, res) => {
   res.status(404).json({ error: "Route not found" });

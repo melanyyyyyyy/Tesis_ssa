@@ -191,7 +191,6 @@ const RoleManagementPage: React.FC = () => {
             }
         ];
 
-        // Add 'Estado' column to all tabs
         baseColumns.push({
             field: 'isPendingApproval',
             headerName: 'Estado',
@@ -241,7 +240,6 @@ const RoleManagementPage: React.FC = () => {
             }
         });
 
-        // Add 'Facultad' column
         baseColumns.push({
             field: 'faculty',
             headerName: 'Facultad',
@@ -306,8 +304,6 @@ const RoleManagementPage: React.FC = () => {
     const actions = useMemo<ReusableTableAction<RoleManagementUser>[]>(() => {
         const baseActions: ReusableTableAction<RoleManagementUser>[] = [];
 
-        // Add Approve/Reject actions if the user is pending approval
-        // These are visible in 'role_requests' and 'all' tabs
         if (activeTab === 'role_requests' || activeTab === 'all') {
             baseActions.push(
                 {
@@ -332,8 +328,6 @@ const RoleManagementPage: React.FC = () => {
             );
         }
 
-        // Add Edit action if the user is NOT pending approval or if we are in other tabs
-        // In 'all' tab, we only show Edit if NOT pending approval
         if (activeTab !== 'role_requests') {
             baseActions.push({
                 variant: 'edit',
