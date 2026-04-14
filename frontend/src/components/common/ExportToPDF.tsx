@@ -267,8 +267,18 @@ const ExportToPDF: React.FC<ExportToPDFProps> = ({
                 if (reportSubtitle?.trim()) {
                     doc.setTextColor(...PDF_THEME.textSecondary);
                     doc.setFontSize(10);
-                    doc.text(reportSubtitle, 14, headerBottomY + 5);
-                    headerBottomY += 5;
+                    const maxTextWidth = 196 - 14; 
+                    const subtitle = reportSubtitle.trim();
+                    const subtitleLines = doc.splitTextToSize(subtitle, maxTextWidth) as string[];
+                    const subtitleStartY = headerBottomY + 5;
+                    const fontSizePt = doc.getFontSize();
+                    const lineHeightMm = fontSizePt * 0.3527777778 * 1.15;
+
+                    subtitleLines.forEach((line, index) => {
+                        doc.text(line, 14, subtitleStartY + index * lineHeightMm);
+                    });
+
+                    headerBottomY = subtitleStartY + (subtitleLines.length - 1) * lineHeightMm;
                 }
 
                 doc.setTextColor(...PDF_THEME.primary);

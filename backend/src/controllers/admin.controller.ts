@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import { Types } from 'mongoose';
 import {
     CareerModel,
     CourseTypeModel,
@@ -20,6 +21,36 @@ import {
     VicedeanModel
 } from '../models/system/index.js';
 import { SyncService } from '../services/sync.service.js';
+
+async function getFilteredCareerIds(options?: {
+    facultyId?: string;
+    courseTypeId?: string;
+    careerId?: string;
+}) {
+    const filter: Record<string, unknown> = {};
+
+    if (options?.facultyId) {
+        filter.facultyId = options.facultyId;
+    }
+    if (options?.courseTypeId) {
+        filter.courseTypeId = options.courseTypeId;
+    }
+    if (options?.careerId) {
+        filter._id = options.careerId;
+    }
+
+    const careers = await CareerModel.find(filter).select('_id').lean();
+    return careers.map((career) => career._id);
+}
+
+async function getSubjectIdsByCareerIds(careerIds: Types.ObjectId[]) {
+    if (careerIds.length === 0) {
+        return [];
+    }
+
+    const subjects = await SubjectModel.find({ careerId: { $in: careerIds } }).select('_id').lean();
+    return subjects.map((subject) => subject._id);
+}
 
 export const getDashboardStats = async (req: Request, res: Response) => {
     try {
@@ -69,7 +100,6 @@ export async function getRoleManagementUsers(req: Request, res: Response) {
             };
         }
 
-        // Fetch pending requests to merge them
         const pendingRequests = await RoleRequestModel.find({ status: 'pending' })
             .populate('requestedRole', 'name')
             .populate('faculty', 'name')
@@ -81,7 +111,6 @@ export async function getRoleManagementUsers(req: Request, res: Response) {
 
         let users: any[] = [];
         if (status === 'role_requests') {
-            // Only fetch users who have a pending request
             const userIdsWithRequests = pendingRequests.map((req: any) => req.user);
             users = await UserModel.find({ _id: { $in: userIdsWithRequests } })
                 .populate('roleId', 'name')
@@ -128,7 +157,6 @@ export async function getRoleManagementUsers(req: Request, res: Response) {
                         ? vicedeanAssignment?.facultyId as { _id?: string; name?: string } | undefined
                         : undefined;
  
-            // If they have a pending request, use the requested faculty for display
             if (pendingRequest) {
                 assignedFaculty = pendingRequest.faculty;
             }
@@ -189,7 +217,7 @@ export async function approveRoleRequest(req: Request, res: Response) {
 
         const roleName = requestedRole.name;
         user.roleId = requestedRole._id;
-        user.accessDenied = false; // Reset access denied when approving a role
+        user.accessDenied = false; 
         await user.save();
 
         if (roleName === 'secretary') {
@@ -217,7 +245,6 @@ export async function approveRoleRequest(req: Request, res: Response) {
             ]);
         }
 
-        // Mark as reviewed
         request.status = 'reviewed';
         await request.save();
 
@@ -377,7 +404,6 @@ export async function updateRoleManagementUser(req: Request, res: Response) {
 
         user.roleId = roleDocument?._id ?? null;
         
-        // Reset accessDenied if a role is being assigned (not unassigned)
         if (roleDocument) {
             user.accessDenied = false;
         }
@@ -729,27 +755,33 @@ export async function updateEvaluation(req: Request, res: Response) {
     }
 }
 
+///////////////////////////////
 export async function getMatriculatedSubjects(req: Request, res: Response) {
     try {
-        const { facultyId, studentId } = req.query;
+        const { facultyId, studentId, courseTypeId, careerId, academicYear } = req.query;
         const page = parseInt(req.query.page as string) || 0;
         const limit = parseInt(req.query.limit as string) || 50;
         const skip = page * limit;
 
         let filter: any = {};
 
+        const hasCareerScope = Boolean(facultyId || courseTypeId || careerId);
+        if (hasCareerScope) {
+            const careerIds = await getFilteredCareerIds({
+                facultyId: typeof facultyId === 'string' ? facultyId : undefined,
+                courseTypeId: typeof courseTypeId === 'string' ? courseTypeId : undefined,
+                careerId: typeof careerId === 'string' ? careerId : undefined
+            });
+            const subjectIds = await getSubjectIdsByCareerIds(careerIds);
+            filter.subjectId = { $in: subjectIds };
+        }
+
         if (studentId) {
             filter.studentId = studentId;
-        } else if (facultyId) {
-            const careers = await CareerModel.find({ facultyId }).select('_id');
-            const careerIds = careers.map(c => c._id);
+        }
 
-            const subjects = await SubjectModel.find({ careerId: { $in: careerIds } }).select('_id');
-            const subjectIds = subjects.map(s => s._id);
-
-            filter.subjectId = { $in: subjectIds };
-        } else {
-            console.log('No filter provided, returning all subjects (potentially large payload)');
+        if (academicYear) {
+            filter.academicYear = academicYear;
         }
 
         const [matriculatedSubjects, totalCount] = await Promise.all([
@@ -926,21 +958,37 @@ export async function getCourseTypes(req: Request, res: Response) {
 
 export async function getStudents(req: Request, res: Response) {
     try {
-        const { facultyId, careerId, academicYear } = req.query;
+        const { facultyId, courseTypeId, careerId, academicYear } = req.query;
         const page = parseInt(req.query.page as string) || 0;
         const limit = parseInt(req.query.limit as string) || 50;
         const skip = page * limit;
 
         let filter: any = {};
 
-        if (careerId) filter.careerId = careerId;
-        if (academicYear) filter.academicYear = academicYear;
+        if (careerId) {
+            const careerFilter: Record<string, unknown> = { _id: careerId };
+            if (facultyId) {
+                careerFilter.facultyId = facultyId;
+            }
+            if (courseTypeId) {
+                careerFilter.courseTypeId = courseTypeId;
+            }
 
-        if (facultyId && !careerId) {
-            const careers = await CareerModel.find({ facultyId }).select('_id');
-            const careerIds = careers.map(c => c._id);
+            const career = await CareerModel.findOne(careerFilter).select('_id').lean();
+            if (!career) {
+                return res.status(200).json({ data: [], totalCount: 0, page, limit });
+            }
+
+            filter.careerId = careerId;
+        } else if (facultyId || courseTypeId) {
+            const careerIds = await getFilteredCareerIds({
+                facultyId: typeof facultyId === 'string' ? facultyId : undefined,
+                courseTypeId: typeof courseTypeId === 'string' ? courseTypeId : undefined
+            });
             filter.careerId = { $in: careerIds };
         }
+
+        if (academicYear) filter.academicYear = academicYear;
 
         const [students, totalCount] = await Promise.all([
             StudentModel.find(filter)
@@ -1025,15 +1073,44 @@ export async function getExaminationTypes(req: Request, res: Response) {
         return res.status(500).json({ success: false, error: error.message });
     }
 }
-
+//////////////////
 export async function getEvaluations(req: Request, res: Response) {
     try {
+        const { facultyId, courseTypeId, careerId, academicYear, studentId } = req.query;
         const page = parseInt(req.query.page as string) || 0;
         const limit = parseInt(req.query.limit as string) || 50;
         const skip = page * limit;
 
+        const matriculatedSubjectFilter: Record<string, unknown> = {};
+        const hasCareerScope = Boolean(facultyId || courseTypeId || careerId);
+
+        if (hasCareerScope) {
+            const careerIds = await getFilteredCareerIds({
+                facultyId: typeof facultyId === 'string' ? facultyId : undefined,
+                courseTypeId: typeof courseTypeId === 'string' ? courseTypeId : undefined,
+                careerId: typeof careerId === 'string' ? careerId : undefined
+            });
+            const subjectIds = await getSubjectIdsByCareerIds(careerIds);
+            matriculatedSubjectFilter.subjectId = { $in: subjectIds };
+        }
+
+        if (academicYear) {
+            matriculatedSubjectFilter.academicYear = academicYear;
+        }
+        if (studentId) {
+            matriculatedSubjectFilter.studentId = studentId;
+        }
+
+        let evaluationFilter: Record<string, unknown> = {};
+        if (Object.keys(matriculatedSubjectFilter).length > 0) {
+            const matriculatedSubjects = await MatriculatedSubjectModel.find(matriculatedSubjectFilter).select('_id').lean();
+            evaluationFilter = {
+                matriculatedSubjectId: { $in: matriculatedSubjects.map((matriculatedSubject) => matriculatedSubject._id) }
+            };
+        }
+
         const [evaluations, totalCount] = await Promise.all([
-            EvaluationModel.find()
+            EvaluationModel.find(evaluationFilter)
                 .populate('studentId', 'firstName lastName')
                 .populate({
                     path: 'matriculatedSubjectId',
@@ -1056,7 +1133,7 @@ export async function getEvaluations(req: Request, res: Response) {
                 .skip(skip)
                 .limit(limit)
                 .lean(),
-            EvaluationModel.countDocuments()
+            EvaluationModel.countDocuments(evaluationFilter)
         ]);
 
         const evaluationsWithNames = await Promise.all(
@@ -1093,12 +1170,26 @@ export async function getEvaluations(req: Request, res: Response) {
 
 export async function getSubjects(req: Request, res: Response) {
     try {
+        const { facultyId, courseTypeId, careerId, academicYear } = req.query;
         const page = parseInt(req.query.page as string) || 0;
         const limit = parseInt(req.query.limit as string) || 50;
         const skip = page * limit;
 
+        const subjectFilter: Record<string, unknown> = {};
+        if (facultyId || courseTypeId || careerId) {
+            const careerIds = await getFilteredCareerIds({
+                facultyId: typeof facultyId === 'string' ? facultyId : undefined,
+                courseTypeId: typeof courseTypeId === 'string' ? courseTypeId : undefined,
+                careerId: typeof careerId === 'string' ? careerId : undefined
+            });
+            subjectFilter.careerId = { $in: careerIds };
+        }
+        if (academicYear) {
+            subjectFilter.academicYear = academicYear;
+        }
+
         const [subjects, totalCount] = await Promise.all([
-            SubjectModel.find()
+            SubjectModel.find(subjectFilter)
                 .populate({
                     path: 'careerId',
                     select: 'name facultyId courseTypeId',
@@ -1110,7 +1201,7 @@ export async function getSubjects(req: Request, res: Response) {
                 .skip(skip)
                 .limit(limit)
                 .lean(),
-            SubjectModel.countDocuments()
+            SubjectModel.countDocuments(subjectFilter)
         ]);
 
         const subjectsWithCareerNames = subjects.map(subject => ({

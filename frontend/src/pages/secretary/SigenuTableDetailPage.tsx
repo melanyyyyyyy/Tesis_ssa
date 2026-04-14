@@ -219,6 +219,8 @@ const SigenuTableDetailPage: React.FC = () => {
     }, [tableType]);
 
     useEffect(() => {
+        const abortController = new AbortController();
+
         const fetchCourseTypes = async () => {
             if (!token || !needsCourseType) {
                 setCourseTypes([]);
@@ -227,6 +229,7 @@ const SigenuTableDetailPage: React.FC = () => {
 
             try {
                 const response = await fetch(`${API_BASE}/secretary/course-types?limit=200`, {
+                    signal: abortController.signal,
                     headers: {
                         Authorization: `Bearer ${token}`
                     }
@@ -244,14 +247,22 @@ const SigenuTableDetailPage: React.FC = () => {
                 const result = await response.json() as { data?: CourseTypeOption[] };
                 setCourseTypes(Array.isArray(result.data) ? result.data : []);
             } catch (error) {
+                if (error instanceof Error && error.name === 'AbortError') {
+                    return;
+                }
                 setFilterError(error instanceof Error ? error.message : 'Error desconocido');
             }
         };
 
         void fetchCourseTypes();
+        return () => {
+            abortController.abort();
+        };
     }, [logout, needsCourseType, token]);
 
     useEffect(() => {
+        const abortController = new AbortController();
+
         const fetchCareers = async () => {
             if (!token || !needsCareer || !selectedCourseTypeId) {
                 setCareers([]);
@@ -265,6 +276,7 @@ const SigenuTableDetailPage: React.FC = () => {
                 });
 
                 const response = await fetch(`${API_BASE}/secretary/careers?${params.toString()}`, {
+                    signal: abortController.signal,
                     headers: {
                         Authorization: `Bearer ${token}`
                     }
@@ -282,14 +294,22 @@ const SigenuTableDetailPage: React.FC = () => {
                 const result = await response.json() as { data?: CareerOption[] };
                 setCareers(Array.isArray(result.data) ? result.data : []);
             } catch (error) {
+                if (error instanceof Error && error.name === 'AbortError') {
+                    return;
+                }
                 setFilterError(error instanceof Error ? error.message : 'Error desconocido');
             }
         };
 
         void fetchCareers();
+        return () => {
+            abortController.abort();
+        };
     }, [logout, needsCareer, selectedCourseTypeId, token]);
 
     useEffect(() => {
+        const abortController = new AbortController();
+
         const fetchStudents = async () => {
             if (!token || !needsStudent || !selectedCourseTypeId || !selectedCareerId || !selectedAcademicYear) {
                 setStudents([]);
@@ -305,6 +325,7 @@ const SigenuTableDetailPage: React.FC = () => {
                 });
 
                 const response = await fetch(`${API_BASE}/secretary/students?${params.toString()}`, {
+                    signal: abortController.signal,
                     headers: {
                         Authorization: `Bearer ${token}`
                     }
@@ -322,11 +343,17 @@ const SigenuTableDetailPage: React.FC = () => {
                 const result = await response.json() as { data?: StudentOption[] };
                 setStudents(Array.isArray(result.data) ? result.data : []);
             } catch (error) {
+                if (error instanceof Error && error.name === 'AbortError') {
+                    return;
+                }
                 setFilterError(error instanceof Error ? error.message : 'Error desconocido');
             }
         };
 
         void fetchStudents();
+        return () => {
+            abortController.abort();
+        };
     }, [logout, needsStudent, selectedAcademicYear, selectedCareerId, selectedCourseTypeId, token]);
 
     useEffect(() => {
