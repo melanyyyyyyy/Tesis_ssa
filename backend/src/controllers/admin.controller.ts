@@ -778,9 +778,7 @@ export async function getMatriculatedSubjects(req: Request, res: Response) {
 
         if (studentId) {
             filter.studentId = studentId;
-        }
-
-        if (academicYear) {
+        } else if (academicYear) {
             filter.academicYear = academicYear;
         }
 
@@ -1094,11 +1092,10 @@ export async function getEvaluations(req: Request, res: Response) {
             matriculatedSubjectFilter.subjectId = { $in: subjectIds };
         }
 
-        if (academicYear) {
-            matriculatedSubjectFilter.academicYear = academicYear;
-        }
         if (studentId) {
             matriculatedSubjectFilter.studentId = studentId;
+        } else if (academicYear) {
+            matriculatedSubjectFilter.academicYear = academicYear;
         }
 
         let evaluationFilter: Record<string, unknown> = {};

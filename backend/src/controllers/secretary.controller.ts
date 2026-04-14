@@ -227,11 +227,10 @@ export async function getMatriculatedSubjects(req: Request, res: Response) {
             subjectId: { $in: subjectIds }
         };
 
-        if (academicYear) {
-            filter.academicYear = academicYear;
-        }
         if (studentId) {
             filter.studentId = studentId;
+        } else if (academicYear) {
+            filter.academicYear = academicYear;
         }
 
         const [matriculatedSubjects, totalCount] = await Promise.all([
@@ -310,11 +309,10 @@ export async function getEvaluations(req: Request, res: Response) {
         const matriculatedSubjectFilter: Record<string, unknown> = {
             subjectId: { $in: subjectIds }
         };
-        if (academicYear) {
-            matriculatedSubjectFilter.academicYear = academicYear;
-        }
         if (studentId) {
             matriculatedSubjectFilter.studentId = studentId;
+        } else if (academicYear) {
+            matriculatedSubjectFilter.academicYear = academicYear;
         }
         const matriculatedSubjects = await MatriculatedSubjectModel.find(matriculatedSubjectFilter).select('_id').lean();
         const matriculatedSubjectIds = matriculatedSubjects.map((matriculatedSubject) => matriculatedSubject._id);
