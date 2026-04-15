@@ -22,14 +22,25 @@ export const generateToken = (user: any, roleName?: string): string => {
 
 export const AuthController = {
     async login(req: Request, res: Response): Promise<void> {
-        const { username, password } = req.body;
+        let { username, password } = req.body as {
+            username?: string;
+            password?: string;
+        };
+
+        if (typeof username === 'string') {
+            username = username.trim();
+
+            if (username.toLowerCase().endsWith('@uho.edu.cu')) {
+                username = username.slice(0, -'@uho.edu.cu'.length);
+            }
+        }
 
         if (!username || !password) {
             res.status(400).json({ error: 'Username and password are required' });
             return;
         }
 
-        if (ENV.NODE_ENV !== 'production' && (username === 'test_secretary' || username === 'test_professor' || username === 'test_vicedean' || username === 'test_admin')) {
+        if (ENV.NODE_ENV !== 'production' && (username === 'test_secretary' || username === 'test_professor' || username === 'test_vicedean' || username === 'test_admin' || username === 'test_student')) {
             try {
                 if (password !== ENV.TEST_USER_PASSWORD) {
                     res.status(401).json({ error: 'Invalid password for test user' });

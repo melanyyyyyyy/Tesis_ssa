@@ -304,3 +304,6 @@ db.subjects.updateOne(
 )
 */
 
+const FacultysigenId = "06";
+const subjectSigenId = "-591e423f:16585e8c5ee:-2fa2";
+const careerSigenId = "0601";

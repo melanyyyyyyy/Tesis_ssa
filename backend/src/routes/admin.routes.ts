@@ -22,7 +22,9 @@ import {
     getStudents,
     getEvaluations,
     getSubjects,
-    getStudentStatuses
+    getStudentStatuses,
+    getTestUsers,
+    createTestUsers
 } from '../controllers/admin.controller.js';
 import { authMiddleware, authorize } from "../middlewares/auth.middleware.js";
 
@@ -55,5 +57,7 @@ router.get('/students', getStudents);
 router.get('/evaluations', getEvaluations);
 router.get('/subjects', getSubjects);
 router.get('/student-statuses', getStudentStatuses);
+router.get('/test-users', getTestUsers);
+router.post('/test-users/create', createTestUsers);
 
 export default router;

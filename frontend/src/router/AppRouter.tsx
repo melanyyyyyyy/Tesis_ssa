@@ -18,6 +18,7 @@ import EvaluationsToExportPage from '../pages/admin/EvaluationsToExportPage';
 import LastExportPage from '../pages/admin/LastExportPage';
 import FacultyAssignmentPage from '../pages/admin/FacultyAssignmentPage';
 import RoleManagementPage from '../pages/admin/RoleManagementPage';
+import TestUsersPage from '../pages/admin/TestUsersPage';
 
 import ProfessorExamCalendarPage from '../pages/professor/ExamCalendarPage';
 import RegisterAttendancePage from '../pages/professor/RegisterAttendancePage';
@@ -88,6 +89,7 @@ export default function AppRouter() {
           <Route path="/admin/sigenu-pending/last-export" element={<LastExportPage />} />
           <Route path="/admin/faculty-assignment" element={<FacultyAssignmentPage />} />
           <Route path="/admin/role-management" element={<RoleManagementPage />} />
+          <Route path="/admin/test-users" element={<TestUsersPage />} />
         </Route>
 
         {/* Secretary Routes */}

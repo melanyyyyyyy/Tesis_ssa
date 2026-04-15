@@ -1,7 +1,7 @@
 import mongoose from 'mongoose';
 import dotenv from 'dotenv';
-import { RoleModel } from '../models/system/index.js';
 import { ENV } from '../config/envs.js'
+import { UserModel, RoleModel } from '../models/system/index.js';
 
 /*
 npx tsx src/scripts/seedRoles.ts
@@ -43,4 +43,45 @@ async function seedRoles() {
     }
 }
 
-seedRoles();
+async function createAdmin() {
+    try {
+        console.log('Connecting to MongoDB...');
+        await mongoose.connect(MONGO_URI);
+        console.log('Connected.');
+
+        const adminRole = await RoleModel.findOne({ name: 'admin' });
+        if (!adminRole) {
+            console.error("Error: Role 'admin' not found. Please run seedRoles.ts first.");
+            return;
+        }
+
+        const userData = {
+            email: 'test_admin',
+            identification: '10000000000',
+            firstName: 'Administrador',
+            lastName: 'De Prueba',
+            roleId: adminRole._id,
+            isActive: true
+        };
+
+        let user = await UserModel.findOne({ identification: userData.identification });
+
+        if (user) {
+            console.log('User already exists.');
+            return;
+        } else {
+            console.log('Creating new user...');
+            user = await UserModel.create(userData);
+            console.log(`User created: ${user.email} with role ${adminRole.name}`);
+        }
+
+    } catch (error) {
+        console.error('Error creating admin user:', error);
+    } finally {
+        await mongoose.disconnect();
+        console.log('Disconnected.');
+    }
+}
+
+await seedRoles();
+await createAdmin();

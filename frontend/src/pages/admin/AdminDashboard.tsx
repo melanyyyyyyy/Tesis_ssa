@@ -15,7 +15,8 @@ import {
     Assignment as AssignmentIcon,
     ArrowForward as ArrowIcon,
     Domain as DomainIcon,
-    ManageAccounts as ManageAccountsIcon
+    ManageAccounts as ManageAccountsIcon,
+    GroupAdd as GroupAddIcon
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
@@ -36,25 +37,32 @@ const AdminDashboard: React.FC = () => {
             color: theme.palette.secondary.main
         },
         {
+            title: 'Usuarios de Prueba',
+            description: 'Generar cuentas de prueba rápidas (administrador, secretario, vicedecano, profesor y estudiante).',
+            icon: <GroupAddIcon />,
+            path: '/admin/test-users',
+            color: theme.palette.primary.main
+        },
+        {
             title: 'Notas a Exportar',
             description: 'Gestionar y exportar calificaciones pendientes hacia el SIGENU.',
             icon: <AssignmentIcon />,
             path: '/admin/sigenu-pending',
-            color: theme.palette.primary.main
+            color: theme.palette.warning.main
         },
         {
             title: 'Gestión de Roles',
             description: 'Administrar privilegios de acceso (profesor, vicedecano, secretario, administrador).',
             icon: <ManageAccountsIcon />,
             path: '/admin/role-management',
-            color: theme.palette.warning.main
+            color: theme.palette.primary.light
         },
         {
             title: 'Asignación de Facultades',
             description: 'Vincular a los secretarios y vicedecanos con su facultad correspondiente.',
             icon: <DomainIcon />,
             path: '/admin/faculty-assignment',
-            color: theme.palette.primary.light
+            color: theme.palette.error.main
         },
 
     ];
@@ -69,7 +77,7 @@ const AdminDashboard: React.FC = () => {
 
                 <Grid container spacing={3}>
                     {menuItems.map((item, index) => (
-                        <Grid size={{ xs: 12, sm: 6, md: 3 }} key={index}>
+                        <Grid size={{ xs: 12, sm: 6, md: 4 }} key={index}>
                             <Card
                                 elevation={0}
                                 onClick={() => navigate(item.path)}

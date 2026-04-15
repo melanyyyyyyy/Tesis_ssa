@@ -20,6 +20,7 @@ import {
     UserModel,
     VicedeanModel
 } from '../models/system/index.js';
+import { ENV } from '../config/envs.js';
 import { SyncService } from '../services/sync.service.js';
 
 async function getFilteredCareerIds(options?: {
@@ -50,6 +51,158 @@ async function getSubjectIdsByCareerIds(careerIds: Types.ObjectId[]) {
 
     const subjects = await SubjectModel.find({ careerId: { $in: careerIds } }).select('_id').lean();
     return subjects.map((subject) => subject._id);
+}
+
+const TEST_USER_PASSWORD = ENV.TEST_USER_PASSWORD;
+const TEST_FACULTY_SIGEN_ID = '06';
+const TEST_SUBJECT_SIGEN_ID = '-591e423f:16585e8c5ee:-2fa2';
+const TEST_CAREER_SIGEN_ID = '0601';
+const TEST_USER_ORDER = ['test_admin', 'test_secretary', 'test_vicedean', 'test_professor', 'test_student'] as const;
+const SIGENU_IMPORT_REQUIRED_MESSAGE = 'No se encontraron los datos base para crear los usuarios de prueba. Primero debe importar los datos del SIGENU en la pagina de importación.';
+
+type TestUsername = (typeof TEST_USER_ORDER)[number];
+type TestRoleName = 'admin' | 'secretary' | 'vicedean' | 'professor' | 'student';
+
+interface EnsureTestUserParams {
+    username: TestUsername;
+    identification: string;
+    firstName: string;
+    lastName: string;
+    roleId: Types.ObjectId;
+    studentId?: Types.ObjectId;
+}
+
+async function getRequiredTestSigenuData() {
+    const [faculty, subject, career] = await Promise.all([
+        FacultyModel.findOne({ sigenId: TEST_FACULTY_SIGEN_ID }).select('_id name sigenId').lean(),
+        SubjectModel.findOne({ sigenId: TEST_SUBJECT_SIGEN_ID }).select('_id name sigenId').lean(),
+        CareerModel.findOne({ sigenId: TEST_CAREER_SIGEN_ID }).select('_id name sigenId').lean()
+    ]);
+
+    if (!faculty || !subject || !career) {
+        throw new Error(SIGENU_IMPORT_REQUIRED_MESSAGE);
+    }
+
+    const student = await StudentModel.findOne({
+        careerId: career._id,
+        academicYear: 1,
+        isActive: true
+    })
+        .select('_id identification firstName lastName')
+        .sort({ firstName: 1, lastName: 1 })
+        .lean();
+
+    if (!student) {
+        throw new Error(SIGENU_IMPORT_REQUIRED_MESSAGE);
+    }
+
+    return { faculty, subject, career, student };
+}
+
+async function ensureTestUser({
+    username,
+    identification,
+    firstName,
+    lastName,
+    roleId,
+    studentId
+}: EnsureTestUserParams) {
+    const [existingByEmail, existingByIdentification] = await Promise.all([
+        UserModel.findOne({ email: username }),
+        UserModel.findOne({ identification })
+    ]);
+
+    let user = existingByIdentification || existingByEmail;
+    let created = false;
+
+    if (existingByEmail && existingByIdentification && String(existingByEmail._id) !== String(existingByIdentification._id)) {
+        existingByEmail.email = undefined;
+        await existingByEmail.save();
+        user = existingByIdentification;
+    }
+
+    if (!user) {
+        user = new UserModel({
+            email: username,
+            identification,
+            firstName,
+            lastName,
+            roleId,
+            studentId,
+            isActive: true,
+            accessDenied: false
+        });
+        created = true;
+    } else {
+        user.email = username;
+        user.identification = identification;
+        user.firstName = firstName;
+        user.lastName = lastName;
+        user.roleId = roleId;
+        user.studentId = studentId;
+        user.isActive = true;
+        user.accessDenied = false;
+    }
+
+    await user.save();
+
+    return { user, created };
+}
+
+async function getTestUsersData() {
+    const users = await UserModel.find({
+        email: { $in: [...TEST_USER_ORDER] }
+    })
+        .populate('roleId', 'name')
+        .sort({ firstName: 1, lastName: 1 })
+        .lean();
+
+    const userIds = users.map((user) => user._id);
+    const [secretaryAssignments, vicedeanAssignments] = await Promise.all([
+        SecretaryModel.find({ userId: { $in: userIds } }).populate('facultyId', 'name').lean(),
+        VicedeanModel.find({ userId: { $in: userIds } }).populate('facultyId', 'name').lean()
+    ]);
+
+    const secretaryFacultyByUserId = new Map(
+        secretaryAssignments.map((assignment) => [
+            String(assignment.userId),
+            ((assignment.facultyId as any)?.name || '-') as string
+        ])
+    );
+    const vicedeanFacultyByUserId = new Map(
+        vicedeanAssignments.map((assignment) => [
+            String(assignment.userId),
+            ((assignment.facultyId as any)?.name || '-') as string
+        ])
+    );
+    const usersByEmail = new Map(users.map((user) => [String(user.email || ''), user]));
+
+    return TEST_USER_ORDER.flatMap((username) => {
+        const user = usersByEmail.get(username);
+        if (!user) {
+            return [];
+        }
+
+        const roleName = ((user.roleId as any)?.name || '') as TestRoleName | '';
+        const userId = String(user._id);
+        const faculty = roleName === 'secretary'
+            ? secretaryFacultyByUserId.get(userId) || '-'
+            : roleName === 'vicedean'
+                ? vicedeanFacultyByUserId.get(userId) || '-'
+                : '-';
+
+        return [{
+            _id: userId,
+            username,
+            firstName: user.firstName || '',
+            lastName: user.lastName || '',
+            identification: user.identification || '',
+            email: username,
+            password: TEST_USER_PASSWORD,
+            faculty,
+            role: roleName || 'sin_rol'
+        }];
+    });
 }
 
 export const getDashboardStats = async (req: Request, res: Response) => {
@@ -1240,5 +1393,146 @@ export async function getStudentStatuses(req: Request, res: Response) {
     } catch (error: any) {
         console.error('Error in getStudentStatuses:', error);
         return res.status(500).json({ success: false, error: error.message });
+    }
+}
+
+export async function getTestUsers(_req: Request, res: Response) {
+    try {
+        const data = await getTestUsersData();
+
+        return res.status(200).json({
+            data,
+            totalCount: data.length
+        });
+    } catch (error: any) {
+        console.error('Error in getTestUsers:', error);
+        return res.status(500).json({ success: false, error: error.message });
+    }
+}
+
+export async function createTestUsers(_req: Request, res: Response) {
+    try {
+        const logs: string[] = [];
+        const { faculty, subject, student } = await getRequiredTestSigenuData();
+
+        logs.push(`Facultad base encontrada: ${faculty.name} (${TEST_FACULTY_SIGEN_ID}).`);
+        logs.push(`Asignatura base encontrada: ${subject.name} (${TEST_SUBJECT_SIGEN_ID}).`);
+        logs.push(`Estudiante base encontrado: ${student.firstName} ${student.lastName}.`);
+
+        const roles = await RoleModel.find({
+            name: { $in: ['admin', 'secretary', 'vicedean', 'professor', 'student'] }
+        })
+            .select('_id name')
+            .lean();
+
+        const roleMap = new Map(roles.map((role) => [role.name, role._id]));
+        const adminRoleId = roleMap.get('admin');
+        const secretaryRoleId = roleMap.get('secretary');
+        const vicedeanRoleId = roleMap.get('vicedean');
+        const professorRoleId = roleMap.get('professor');
+        const studentRoleId = roleMap.get('student');
+
+        if (!adminRoleId || !secretaryRoleId || !vicedeanRoleId || !professorRoleId || !studentRoleId) {
+            return res.status(500).json({
+                success: false,
+                error: 'No estan configurados todos los roles requeridos para los usuarios de prueba.'
+            });
+        }
+
+        const adminResult = await ensureTestUser({
+            username: 'test_admin',
+            identification: '10000000000',
+            firstName: 'Administrador',
+            lastName: 'De Prueba',
+            roleId: adminRoleId
+        });
+        logs.push(adminResult.created
+            ? 'Administrador de prueba creado.'
+            : 'Administrador de prueba actualizado.');
+
+        const secretaryResult = await ensureTestUser({
+            username: 'test_secretary',
+            identification: '10000000001',
+            firstName: 'Secretario',
+            lastName: 'De Prueba',
+            roleId: secretaryRoleId
+        });
+        await SecretaryModel.findOneAndUpdate(
+            { userId: secretaryResult.user._id },
+            {
+                userId: secretaryResult.user._id,
+                facultyId: faculty._id
+            },
+            { upsert: true, new: true }
+        );
+        logs.push(secretaryResult.created
+            ? `Secretario de prueba creado y vinculado a la facultad ${faculty.name}.`
+            : `Secretario de prueba actualizado y vinculado a la facultad ${faculty.name}.`);
+
+        const vicedeanResult = await ensureTestUser({
+            username: 'test_vicedean',
+            identification: '10000000002',
+            firstName: 'Vicedeano',
+            lastName: 'De Prueba',
+            roleId: vicedeanRoleId
+        });
+        await VicedeanModel.findOneAndUpdate(
+            { userId: vicedeanResult.user._id },
+            {
+                userId: vicedeanResult.user._id,
+                facultyId: faculty._id
+            },
+            { upsert: true, new: true }
+        );
+        logs.push(vicedeanResult.created
+            ? `Vicedecano de prueba creado y vinculado a la facultad ${faculty.name}.`
+            : `Vicedecano de prueba actualizado y vinculado a la facultad ${faculty.name}.`);
+
+        const professorResult = await ensureTestUser({
+            username: 'test_professor',
+            identification: '10000000003',
+            firstName: 'Profesor',
+            lastName: 'De Prueba',
+            roleId: professorRoleId
+        });
+        await SubjectModel.findByIdAndUpdate(subject._id, {
+            professorId: professorResult.user._id
+        });
+        logs.push(professorResult.created
+            ? `Profesor de prueba creado y asignado a la asignatura ${subject.name}.`
+            : `Profesor de prueba actualizado y asignado a la asignatura ${subject.name}.`);
+
+        await StudentModel.findByIdAndUpdate(student._id, {
+            email: 'test_student'
+        });
+        const studentResult = await ensureTestUser({
+            username: 'test_student',
+            identification: student.identification,
+            firstName: student.firstName,
+            lastName: student.lastName,
+            roleId: studentRoleId,
+            studentId: student._id
+        });
+        logs.push(studentResult.created
+            ? `Estudiante de prueba creado a partir del registro ${student.firstName} ${student.lastName}.`
+            : `Estudiante de prueba actualizado a partir del registro ${student.firstName} ${student.lastName}.`);
+
+        const data = await getTestUsersData();
+
+        return res.status(200).json({
+            success: true,
+            message: 'Usuarios de prueba creados o actualizados correctamente.',
+            logs,
+            data,
+            totalCount: data.length
+        });
+    } catch (error: any) {
+        console.error('Error in createTestUsers:', error);
+
+        const statusCode = error.message === SIGENU_IMPORT_REQUIRED_MESSAGE ? 400 : 500;
+        return res.status(statusCode).json({
+            success: false,
+            error: error.message
+        });
     }
 }
