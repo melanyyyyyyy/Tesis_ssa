@@ -50,7 +50,6 @@ const EvaluationSchema = new Schema<IEvaluation>(
         registrationDate: {
             type: Date,
             required: true,
-            index: true,
         }
     },
     {

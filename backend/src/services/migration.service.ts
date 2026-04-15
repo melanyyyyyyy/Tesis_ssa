@@ -38,6 +38,10 @@ export const MigrationService = {
         }
     },
 
+    getWriteErrorCount(error: any) {
+        return error?.writeErrors?.length || 1;
+    },
+
     async migrateFaculties() {
         console.log('Migrating Faculties...');
 
@@ -63,7 +67,7 @@ export const MigrationService = {
             try {
                 await FacultyModel.bulkWrite(bulkOps, { ordered: false });
             } catch (error) {
-                console.warn('Some faculties failed to migrate:', error);
+                console.warn(`Some faculties failed to migrate. Write errors: ${this.getWriteErrorCount(error)}`);
             }
         }
 
@@ -92,7 +96,7 @@ export const MigrationService = {
             try {
                 await CourseTypeModel.bulkWrite(bulkOps, { ordered: false });
             } catch (error) {
-                console.warn('Some course types failed to migrate:', error);
+                console.warn(`Some course types failed to migrate. Write errors: ${this.getWriteErrorCount(error)}`);
             }
         }
 
@@ -135,7 +139,7 @@ export const MigrationService = {
             try {
                 await EvaluationValueModel.bulkWrite(bulkOps, { ordered: false });
             } catch (error) {
-                console.warn('Some evaluation values failed to migrate:', error);
+                console.warn(`Some evaluation values failed to migrate. Write errors: ${this.getWriteErrorCount(error)}`);
             }
         }
 
@@ -197,7 +201,8 @@ export const MigrationService = {
 
         let bulkOps = [];
         let count = 0;
-        let errors = 0;
+        let missingReferences = 0;
+        let writeErrors = 0;
         const batchSize = 1000;
 
         for (const row of rows) {
@@ -205,7 +210,7 @@ export const MigrationService = {
             const courseTypeId = courseTypeMap.get(String(row.course_type_fk));
 
             if (!facultyId || !courseTypeId) {
-                errors++;
+                missingReferences++;
                 continue;
             }
 
@@ -222,18 +227,30 @@ export const MigrationService = {
             });
 
             if (bulkOps.length === batchSize) {
-                await CareerModel.bulkWrite(bulkOps);
-                count += bulkOps.length;
+                try {
+                    await CareerModel.bulkWrite(bulkOps, { ordered: false });
+                    count += bulkOps.length;
+                } catch (error: any) {
+                    const currentWriteErrors = this.getWriteErrorCount(error);
+                    writeErrors += currentWriteErrors;
+                    count += (bulkOps.length - currentWriteErrors);
+                }
                 bulkOps = [];
             }
         }
 
         if (bulkOps.length > 0) {
-            await CareerModel.bulkWrite(bulkOps);
-            count += bulkOps.length;
+            try {
+                await CareerModel.bulkWrite(bulkOps, { ordered: false });
+                count += bulkOps.length;
+            } catch (error: any) {
+                const currentWriteErrors = this.getWriteErrorCount(error);
+                writeErrors += currentWriteErrors;
+                count += (bulkOps.length - currentWriteErrors);
+            }
         }
 
-        console.log(`Careers processed: ${count}. Errors/Skipped: ${errors}.`);
+        console.log(`Careers processed: ${count}. Missing references: ${missingReferences}. Write errors: ${writeErrors}.`);
     },
 
     async migrateStudents() {
@@ -278,7 +295,7 @@ export const MigrationService = {
         ON s.career_fk = c.id_career
     JOIN public.course_type ct
         ON s.course_type_fk = ct.id_course_type
-    WHERE s.student_status_fk IN ('02','03','04')
+    WHERE s.student_status_fk = '02'
         AND c.faculty_fk IS NOT NULL
         AND ct.name IN ('Curso Diurno', 'Curso por Encuentros')
     GROUP BY
@@ -292,7 +309,10 @@ export const MigrationService = {
 
         let studentBulkOps = [];
         let count = 0;
-        let errors = 0;
+        let missingReferences = 0;
+        let duplicateIdentifications = 0;
+        let studentWriteErrors = 0;
+        let userWriteErrors = 0;
         const batchSize = 500;
 
         for (const row of rows) {
@@ -301,7 +321,11 @@ export const MigrationService = {
             const statusId = statusMap.get(String(row.student_status_fk));
 
             if (!careerId || !courseTypeId || !statusId || seenIdentifications.has(row.identification)) {
-                errors++;
+                if (seenIdentifications.has(row.identification)) {
+                    duplicateIdentifications++;
+                } else {
+                    missingReferences++;
+                }
                 continue;
             }
 
@@ -326,52 +350,71 @@ export const MigrationService = {
             });
 
             if (studentBulkOps.length === batchSize) {
-                await this.executeBatch(studentBulkOps, studentRole._id);
-                count += studentBulkOps.length;
+                const batchResult = await this.executeBatch(studentBulkOps, studentRole._id);
+                count += batchResult.persistedStudents;
+                studentWriteErrors += batchResult.studentWriteErrors;
+                userWriteErrors += batchResult.userWriteErrors;
                 studentBulkOps = [];
             }
         }
 
         if (studentBulkOps.length > 0) {
-            await this.executeBatch(studentBulkOps, studentRole._id);
-            count += studentBulkOps.length;
+            const batchResult = await this.executeBatch(studentBulkOps, studentRole._id);
+            count += batchResult.persistedStudents;
+            studentWriteErrors += batchResult.studentWriteErrors;
+            userWriteErrors += batchResult.userWriteErrors;
         }
 
-        console.log(`Students processed: ${count}. Errors/Skipped: ${errors}.`);
+        console.log(`Students processed: ${count}. Missing references: ${missingReferences}. Duplicate identifications: ${duplicateIdentifications}. Student write errors: ${studentWriteErrors}. User write errors: ${userWriteErrors}.`);
     },
 
     async executeBatch(studentOps: any[], roleId: any) {
+        let studentWriteErrors = 0;
+        let userWriteErrors = 0;
+
         try {
             await StudentModel.bulkWrite(studentOps, { ordered: false });
-
-            const sigenIds = studentOps.map(op => op.updateOne.filter.sigenId);
-            const savedStudents = await StudentModel.find(
-                { sigenId: { $in: sigenIds } },
-                '_id identification firstName lastName email'
-            ).lean();
-
-            const userBulkOps = savedStudents.map(student => ({
-                updateOne: {
-                    filter: { identification: student.identification },
-                    update: {
-                        firstName: student.firstName,
-                        lastName: student.lastName,
-                        identification: student.identification,
-                        ...(student.email && { email: student.email }),
-                        roleId: roleId,
-                        studentId: student._id,
-                        isActive: false
-                    },
-                    upsert: true
-                }
-            }));
-
-            if (userBulkOps.length > 0) {
-                await UserModel.bulkWrite(userBulkOps, { ordered: false });
-            }
         } catch (err) {
-            console.error('Error in batch execution:', err);
+            studentWriteErrors = this.getWriteErrorCount(err);
+            console.warn(`Student batch completed with write errors: ${studentWriteErrors}.`);
         }
+
+        const sigenIds = studentOps.map(op => op.updateOne.filter.sigenId);
+        const savedStudents = await StudentModel.find(
+            { sigenId: { $in: sigenIds } },
+            '_id identification firstName lastName email'
+        ).lean();
+
+        const userBulkOps = savedStudents.map(student => ({
+            updateOne: {
+                filter: { identification: student.identification },
+                update: {
+                    firstName: student.firstName,
+                    lastName: student.lastName,
+                    identification: student.identification,
+                    ...(student.email && { email: student.email }),
+                    roleId: roleId,
+                    studentId: student._id,
+                    isActive: false
+                },
+                upsert: true
+            }
+        }));
+
+        if (userBulkOps.length > 0) {
+            try {
+                await UserModel.bulkWrite(userBulkOps, { ordered: false });
+            } catch (err) {
+                userWriteErrors = this.getWriteErrorCount(err);
+                console.warn(`User batch completed with write errors: ${userWriteErrors}.`);
+            }
+        }
+
+        return {
+            persistedStudents: savedStudents.length,
+            studentWriteErrors,
+            userWriteErrors
+        };
     },
 
     async migrateSubjects() {
@@ -404,20 +447,21 @@ export const MigrationService = {
             AND s.year BETWEEN 1 AND 6          
             AND d.career_fk IS NOT NULL         
             AND c.faculty_fk IS NOT NULL        
-            AND stu.student_status_fk IN ('02','03','04') 
+            AND stu.student_status_fk = '02'
             AND ct.name IN ('Curso Diurno', 'Curso por Encuentros');
     `);
 
         let bulkOps = [];
         let count = 0;
-        let errors = 0;
+        let missingReferences = 0;
+        let writeErrors = 0;
         const batchSize = 1000;
 
         for (const row of rows) {
             const careerId = careerMap.get(String(row.career_fk));
 
             if (!careerId) {
-                errors++;
+                missingReferences++;
                 continue;
             }
 
@@ -438,9 +482,9 @@ export const MigrationService = {
                     await SubjectModel.bulkWrite(bulkOps, { ordered: false });
                     count += bulkOps.length;
                 } catch (err: any) {
-                    const writeErrors = err.writeErrors ? err.writeErrors.length : 1;
-                    errors += writeErrors;
-                    count += (bulkOps.length - writeErrors);
+                    const currentWriteErrors = this.getWriteErrorCount(err);
+                    writeErrors += currentWriteErrors;
+                    count += (bulkOps.length - currentWriteErrors);
                 }
                 bulkOps = [];
             }
@@ -451,26 +495,31 @@ export const MigrationService = {
                 await SubjectModel.bulkWrite(bulkOps, { ordered: false });
                 count += bulkOps.length;
             } catch (err: any) {
-                const writeErrors = err.writeErrors ? err.writeErrors.length : 1;
-                errors += writeErrors;
-                count += (bulkOps.length - writeErrors);
+                const currentWriteErrors = this.getWriteErrorCount(err);
+                writeErrors += currentWriteErrors;
+                count += (bulkOps.length - currentWriteErrors);
             }
         }
 
-        console.log(`Subjects processed: ${count}. Errors/Skipped: ${errors}.`);
+        console.log(`Subjects processed: ${count}. Missing references: ${missingReferences}. Write errors: ${writeErrors}.`);
     },
 
     async migrateMatriculatedSubjects() {
         console.log('Migrating Matriculed Subjects...');
+        const stageStartedAt = Date.now();
 
+        const referencesStartedAt = Date.now();
         const [students, subjects] = await Promise.all([
             StudentModel.find({}, 'sigenId _id').lean(),
             SubjectModel.find({}, 'sigenId _id').lean()
         ]);
+        console.log(`[Matriculated Subjects] Reference documents loaded in ${Date.now() - referencesStartedAt} ms. Students: ${students.length}. Subjects: ${subjects.length}.`);
 
         const studentMap = new Map(students.map(s => [s.sigenId, s._id]));
         const subjectMap = new Map(subjects.map(s => [s.sigenId, s._id]));
 
+        console.log('[Matriculated Subjects] Fetching rows from PostgreSQL...');
+        const queryStartedAt = Date.now();
         const rows = await DatabaseService.getRows(`
         SELECT DISTINCT ON (ms.student_fk, ms.subject_fk)
             ms.matriculated_subject_id,
@@ -487,25 +536,30 @@ export const MigrationService = {
             ON s.career_fk = c.id_career
         JOIN public.course_type ct
             ON c.course_type_fk = ct.id_course_type
-        WHERE s.student_status_fk IN ('02','03','04')
+        WHERE s.student_status_fk = '02'
             AND sub.cancelled = false
             AND ms.cancelled = false
             AND sub.year BETWEEN 1 AND 6
             AND ct.name IN ('Curso Diurno', 'Curso por Encuentros')
         ORDER BY ms.student_fk, ms.subject_fk, ms.matriculated_subject_id;
     `);
+        console.log(`[Matriculated Subjects] PostgreSQL rows fetched in ${Date.now() - queryStartedAt} ms. Rows: ${rows.length}.`);
 
         let bulkOps = [];
         let count = 0;
-        let errors = 0;
+        let missingReferences = 0;
+        let writeErrors = 0;
         const batchSize = 1000;
+        let scannedRows = 0;
+        let executedBatches = 0;
 
         for (const row of rows) {
+            scannedRows++;
             const studentId = studentMap.get(String(row.student_fk));
             const subjectId = subjectMap.get(String(row.subject_fk));
 
             if (!studentId || !subjectId) {
-                errors++;
+                missingReferences++;
                 continue;
             }
 
@@ -523,28 +577,38 @@ export const MigrationService = {
             });
 
             if (bulkOps.length === batchSize) {
+                const batchStartedAt = Date.now();
                 try {
                     await MatriculatedSubjectModel.bulkWrite(bulkOps, { ordered: false });
                     count += bulkOps.length;
                 } catch (err: any) {
-                    errors += err.writeErrors ? err.writeErrors.length : 1;
-                    count += (bulkOps.length - (err.writeErrors ? err.writeErrors.length : 1));
+                    const currentWriteErrors = this.getWriteErrorCount(err);
+                    writeErrors += currentWriteErrors;
+                    count += (bulkOps.length - currentWriteErrors);
+                }
+                executedBatches++;
+                if (executedBatches % 10 === 0) {
+                    console.log(`[Matriculated Subjects] Batch ${executedBatches} completed in ${Date.now() - batchStartedAt} ms. Scanned: ${scannedRows}/${rows.length}. Inserted/Updated: ${count}. Missing references: ${missingReferences}. Write errors: ${writeErrors}. Elapsed: ${Date.now() - stageStartedAt} ms.`);
                 }
                 bulkOps = [];
             }
         }
 
         if (bulkOps.length > 0) {
+            const batchStartedAt = Date.now();
             try {
                 await MatriculatedSubjectModel.bulkWrite(bulkOps, { ordered: false });
                 count += bulkOps.length;
             } catch (err: any) {
-                errors += err.writeErrors ? err.writeErrors.length : 1;
-                count += (bulkOps.length - (err.writeErrors ? err.writeErrors.length : 1));
+                const currentWriteErrors = this.getWriteErrorCount(err);
+                writeErrors += currentWriteErrors;
+                count += (bulkOps.length - currentWriteErrors);
             }
+            executedBatches++;
+            console.log(`[Matriculated Subjects] Final batch ${executedBatches} completed in ${Date.now() - batchStartedAt} ms. Scanned: ${scannedRows}/${rows.length}. Inserted/Updated: ${count}. Missing references: ${missingReferences}. Write errors: ${writeErrors}. Elapsed: ${Date.now() - stageStartedAt} ms.`);
         }
 
-        console.log(`Matricules processed: ${count}. Errors/Skipped: ${errors}.`);
+        console.log(`Matricules processed: ${count}. Missing references: ${missingReferences}. Write errors: ${writeErrors}. Total elapsed: ${Date.now() - stageStartedAt} ms.`);
     },
 
     async migrateEvaluations() {
@@ -583,7 +647,7 @@ export const MigrationService = {
         JOIN public.course_type ct 
             ON c.course_type_fk = ct.id_course_type
         WHERE 
-            s.student_status_fk IN ('02','03','04')
+            s.student_status_fk = '02'
             AND sub.cancelled = false
             AND sub.year BETWEEN 1 AND 6
             AND ct.name IN ('Curso Diurno', 'Curso por Encuentros')
@@ -593,7 +657,8 @@ export const MigrationService = {
 
         let bulkOps = [];
         let count = 0;
-        let errors = 0;
+        let missingReferences = 0;
+        let writeErrors = 0;
         const batchSize = 1000;
 
         for (const row of rows) {
@@ -603,7 +668,7 @@ export const MigrationService = {
             const valueId = valueMap.get(String(row.evaluation_value_fk));
 
             if (!studentId || !matriculatedId || !examTypeId || !valueId) {
-                errors++;
+                missingReferences++;
                 continue;
             }
 
@@ -623,17 +688,29 @@ export const MigrationService = {
             });
 
             if (bulkOps.length === batchSize) {
-                await EvaluationModel.bulkWrite(bulkOps);
-                count += bulkOps.length;
+                try {
+                    await EvaluationModel.bulkWrite(bulkOps, { ordered: false });
+                    count += bulkOps.length;
+                } catch (err: any) {
+                    const currentWriteErrors = this.getWriteErrorCount(err);
+                    writeErrors += currentWriteErrors;
+                    count += (bulkOps.length - currentWriteErrors);
+                }
                 bulkOps = [];
             }
         }
 
         if (bulkOps.length > 0) {
-            await EvaluationModel.bulkWrite(bulkOps);
-            count += bulkOps.length;
+            try {
+                await EvaluationModel.bulkWrite(bulkOps, { ordered: false });
+                count += bulkOps.length;
+            } catch (err: any) {
+                const currentWriteErrors = this.getWriteErrorCount(err);
+                writeErrors += currentWriteErrors;
+                count += (bulkOps.length - currentWriteErrors);
+            }
         }
 
-        console.log(`Evaluations processed: ${count}. Errors/Skipped: ${errors}.`);
+        console.log(`Evaluations processed: ${count}. Missing references: ${missingReferences}. Write errors: ${writeErrors}.`);
     }
 };

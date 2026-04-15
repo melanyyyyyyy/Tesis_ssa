@@ -40,22 +40,16 @@ export const FileService = {
 
         chunks.sort((a, b) => parseInt(a.split('-')[1]) - parseInt(b.split('-')[1]));
 
-        const writeStream = fs.createWriteStream(finalPath);
-
-
         for (const chunkName of chunks) {
             const chunkPath = path.join(chunkDir, chunkName);
             const readStream = fs.createReadStream(chunkPath);
-            
-            await pipeline(readStream, writeStream, { end: false });
+
+            const appendStream = fs.createWriteStream(finalPath, { flags: 'a' });
+
+            await pipeline(readStream, appendStream);
             
             await fsPromises.unlink(chunkPath);
         }
-
-        await new Promise<void>((resolve, reject) => {
-            writeStream.end(() => resolve());
-            writeStream.on('error', reject);
-        });
 
         await fsPromises.rm(chunkDir, { recursive: true, force: true });
         

@@ -1,10 +1,7 @@
-import { exec, spawn } from 'child_process';
-import { promisify } from 'util';
+import { spawn } from 'child_process';
 import { Client } from 'pg';
 import path from 'path';
 import { ENV } from '../config/envs.js';
-
-const execPromise = promisify(exec);
 
 const dbConfig = {
     user: ENV.DB_USER || 'postgres',
@@ -39,22 +36,64 @@ export const DatabaseService = {
             await adminClient.end();
         }
 
-        const command = `pg_restore -h "${dbConfig.host}" -p ${dbConfig.port} -U "${dbConfig.user}" -d "${dbConfig.importDb}" --clean --if-exists --no-owner --no-privileges "${backupPath}"`;
-
         try {
             console.log(`[DB Restore] Restoring to: ${dbConfig.importDb}...`);
+            let warningOutput = '';
 
-            await execPromise(command, {
-                env: { ...process.env, PGPASSWORD: dbConfig.password }
+            await new Promise<void>((resolve, reject) => {
+                const child = spawn('pg_restore', [
+                    '-h', dbConfig.host,
+                    '-p', dbConfig.port.toString(),
+                    '-U', dbConfig.user,
+                    '-d', dbConfig.importDb,
+                    '--clean',
+                    '--if-exists',
+                    '--no-owner',
+                    '--no-privileges',
+                    backupPath
+                ], {
+                    env: { ...process.env, PGPASSWORD: dbConfig.password }
+                });
+
+                let stderr = '';
+                let stdout = '';
+
+                child.stdout.on('data', (data) => {
+                    stdout += data.toString();
+                });
+
+                child.stderr.on('data', (data) => {
+                    stderr += data.toString();
+                });
+
+                child.on('close', (code) => {
+                    if (code === 0) {
+                        resolve();
+                        return;
+                    }
+
+                    if (code === 1) {
+                        warningOutput = (stderr || stdout).trim();
+                        resolve();
+                        return;
+                    }
+
+                    reject(new Error((stderr || stdout).trim() || `pg_restore process exited with code ${code}`));
+                });
+
+                child.on('error', (err) => reject(err));
             });
+
+            if (warningOutput) {
+                console.warn(`[DB Restore Warning] pg_restore finished with warnings (code 1).\n${warningOutput}`);
+            }
+
+            console.log('[DB Restore] Running ANALYZE on restored database...');
+            await this.execute('ANALYZE;');
+            console.log('[DB Restore] ANALYZE completed.');
 
             console.log(`[DB Restore Success] Data is ready in PostgreSQL.`);
         } catch (error: any) {
-            if (error.code === 1) {
-                console.warn(`[DB Restore Warning] pg_restore finished with warnings (code 1). Check logs if necessary.`);
-                return;
-            }
-
             console.error(`[DB Restore Error] Fatal error during pg_restore:`, error.message);
             throw new Error(`Critical failure while restoring backup file: ${error.message}`);
         }
