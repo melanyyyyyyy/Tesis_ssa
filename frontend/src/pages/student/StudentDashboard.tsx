@@ -40,21 +40,21 @@ const StudentDashboard: React.FC = () => {
             title: 'Registros de evaluaciones y asistencias',
             description: 'Consulta tus evaluaciones y asistencias de las asignaturas que tienes matriculadas.',
             icon: <FactCheckIcon />,
-            path: '',
+            path: '/student/records',
             color: theme.palette.secondary.main,
         },
         {
             title: 'Escalafón académico',
             description: 'Consulta tu índice y descubre tu posición en el ranking del grupo de acuerdo a tu rendimiento.',
             icon: <EmojiEventsIcon />,
-            path: '',
+            path: '/student/academic-ranking',
             color: theme.palette.warning.main,
         },
         {
             title: 'Calendario de exámenes',
             description: 'Visualiza las fechas programadas para tus exámenes finales en cada convocatoria.',
             icon: <EventIcon />,
-            path: '',
+            path: '/student/exams',
             color: theme.palette.error.main,
         },
         {
@@ -75,7 +75,7 @@ const StudentDashboard: React.FC = () => {
             <Container maxWidth="xl" sx={{ py: 4 }}>
                 <PageHeader
                     title="Panel del Estudiante"
-                    subtitle={`Bienvenido, ${user?.firstName || 'Usuario'}. Seleccione una opcion para continuar.`}
+                    subtitle={`Bienvenido, ${user?.firstName || 'Usuario'}. Seleccione una opción para continuar.`}
                 />
 
                 <Grid container spacing={3}>

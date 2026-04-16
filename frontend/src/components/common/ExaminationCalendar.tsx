@@ -43,6 +43,7 @@ interface ExaminationCalendarProps {
     carrera: EntityInput;
     asignatura?: EntityInput;
     academicYear?: number;
+    allowedSubjectIds?: string[];
     height?: number;
     readOnly?: boolean;
 }
@@ -85,6 +86,7 @@ const ExaminationCalendar: React.FC<ExaminationCalendarProps> = ({
     carrera,
     asignatura,
     academicYear,
+    allowedSubjectIds,
     height = 650,
     readOnly = false
 }) => {
@@ -104,6 +106,14 @@ const ExaminationCalendar: React.FC<ExaminationCalendarProps> = ({
 
     const careerId = useMemo(() => getEntityId(carrera), [carrera]);
     const fixedSubjectId = useMemo(() => getEntityId(asignatura), [asignatura]);
+    const allowedSubjectIdsKey = useMemo(
+        () => (allowedSubjectIds || []).filter(Boolean).sort().join(','),
+        [allowedSubjectIds]
+    );
+    const allowedSubjectIdSet = useMemo(
+        () => new Set((allowedSubjectIdsKey ? allowedSubjectIdsKey.split(',') : []).filter(Boolean)),
+        [allowedSubjectIdsKey]
+    );
 
     const fetchEvents = useCallback(async () => {
         if (!token || !careerId) return;
@@ -123,8 +133,15 @@ const ExaminationCalendar: React.FC<ExaminationCalendarProps> = ({
         }
 
         const data = await response.json();
-        setEvents(data.events || []);
-    }, [academicYear, careerId, token]);
+        const filteredEvents = Array.isArray(data.events)
+            ? data.events.filter((event: ExamCalendarEventFromApi) => {
+                if (allowedSubjectIdSet.size === 0) return true;
+                const subjectId = getEntityId(event.subjectId);
+                return subjectId ? allowedSubjectIdSet.has(subjectId) : false;
+            })
+            : [];
+        setEvents(filteredEvents);
+    }, [academicYear, allowedSubjectIdSet, careerId, token]);
 
     const fetchSubjects = useCallback(async () => {
         if (!token || !careerId || fixedSubjectId) return;
@@ -144,8 +161,14 @@ const ExaminationCalendar: React.FC<ExaminationCalendarProps> = ({
         }
 
         const data = await response.json();
-        setSubjects(data.subjects || []);
-    }, [academicYear, careerId, fixedSubjectId, token]);
+        const filteredSubjects = Array.isArray(data.subjects)
+            ? data.subjects.filter((subject: SubjectOption) => {
+                if (allowedSubjectIdSet.size === 0) return true;
+                return allowedSubjectIdSet.has(subject._id);
+            })
+            : [];
+        setSubjects(filteredSubjects);
+    }, [academicYear, allowedSubjectIdSet, careerId, fixedSubjectId, token]);
 
     const fetchExaminationTypes = useCallback(async () => {
         if (!token) return;
@@ -340,7 +363,7 @@ const ExaminationCalendar: React.FC<ExaminationCalendarProps> = ({
         <Card elevation={0} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
             <CardContent>
                 <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mb: 2 }}>
-                    {!fixedSubjectId && (
+                    {!readOnly && !fixedSubjectId && (
                         <FormControl fullWidth disabled={loading || submitting}>
                             <InputLabel id="calendar-subject-label">Asignatura</InputLabel>
                             <Select
@@ -385,7 +408,7 @@ const ExaminationCalendar: React.FC<ExaminationCalendarProps> = ({
 
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
                     {readOnly
-                        ? 'Visualiza el calendario de exámenes de la carrera.'
+                        ? 'Visualiza el calendario de exámenes de tus asignaturas matriculadas.'
                         : 'Haz clic en un día para añadir un examen. Haz clic en un evento para eliminarlo.'}
                 </Typography>
 

@@ -33,7 +33,11 @@ import ProfessorDashboard from '../pages/professor/ProfessorDashboard';
 import SubjectDetail from '../pages/professor/SubjectDetail';
 import StudentDetail from '../pages/professor/StudentDetail';
 import ChatPage from '../pages/professor/Chat';
+import StudentAcademicRankingPage from '../pages/student/AcademicRanking';
 import StudentDashboard from '../pages/student/StudentDashboard';
+import StudentExamCalendarPage from '../pages/student/ExamCalendarPage';
+import StudentRecordsPage from '../pages/student/Records';
+import StudentSubjectRecordsDetailPage from '../pages/student/SubjectRecordsDetail';
 import StudentChatPage from '../pages/student/Chat';
 
 import ProfilePage from '../pages/common/ProfilePage';
@@ -125,6 +129,10 @@ export default function AppRouter() {
         <Route element={<ProtectedRoute allowedRoles={['student']} />}>
           <Route path="/" element={<Navigate to="/student/dashboard" replace />} />
           <Route path="/student/dashboard" element={<StudentDashboard />} />
+          <Route path="/student/academic-ranking" element={<StudentAcademicRankingPage />} />
+          <Route path="/student/exams" element={<StudentExamCalendarPage />} />
+          <Route path="/student/records" element={<StudentRecordsPage />} />
+          <Route path="/student/subject-records-detail" element={<StudentSubjectRecordsDetailPage />} />
           <Route path="/student/chat" element={<StudentChatPage />} />
         </Route>
 
