@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
+import { useAuth } from '../../context/AuthContext';
 import {
     Box,
     Card,
@@ -74,18 +75,20 @@ const getRoleName = (role: string) => {
 
 const ProfilePage: React.FC = () => {
     const theme = useTheme();
+    const { token } = useAuth(); 
     const [profile, setProfile] = useState<UserProfile | null>(null);
     const [facultyName, setFacultyName] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
-    useEffect(() => {
-        fetchUserProfile();
-    }, []);
+    const fetchUserProfile = useCallback(async () => {
+        if (!token) {
+            setError('No authentication token found.');
+            setLoading(false);
+            return;
+        }
 
-    const fetchUserProfile = async () => {
         try {
-            const token = localStorage.getItem('token');
             console.log('Token retrieved:', token ? 'Token exists' : 'No token found');
             console.log('API URL:', `${API_BASE}/common/profile`);
 
@@ -136,7 +139,11 @@ const ProfilePage: React.FC = () => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [token]);
+
+    useEffect(() => {
+        fetchUserProfile();
+    }, [fetchUserProfile]);
 
     if (loading) {
         return (
