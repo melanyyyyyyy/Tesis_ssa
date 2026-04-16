@@ -60,14 +60,17 @@ const SubjectSchema = new Schema<ISubject>(
         versionKey: false
     }
 );
+/*
 
 SubjectSchema.index({ careerId: 1, academicYear: 1 });
+
 SubjectSchema.index({
     name: 1,
     careerId: 1,
     academicYear: 1,
     professorId: 1
 }, { unique: true, sparse: true });
+*/
 
 SubjectSchema.methods.toJSON = function () {
     const obj = this.toObject();

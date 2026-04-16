@@ -244,6 +244,8 @@ const LoginPage: React.FC = () => {
                 handleNavigate('/secretary/dashboard', data);
             } else if (data.user.role === 'professor') {
                 handleNavigate('/professor/dashboard', data);
+            } else if (data.user.role === 'student') {
+                handleNavigate('/student/dashboard', data);
             } else if (data.user.role === 'vicedean') {
                 handleNavigate('/vicedean/dashboard', data);
             } else if (data.user.role === 'admin') {

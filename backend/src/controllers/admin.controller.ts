@@ -55,7 +55,7 @@ async function getSubjectIdsByCareerIds(careerIds: Types.ObjectId[]) {
 
 const TEST_USER_PASSWORD = ENV.TEST_USER_PASSWORD;
 const TEST_FACULTY_SIGEN_ID = '06';
-const TEST_SUBJECT_SIGEN_ID = '-591e423f:16585e8c5ee:-2fa2';
+const TEST_SUBJECT_SIGEN_ID = '-591e423f:16585e8c5ee:-28e3'; // matematica 4
 const TEST_CAREER_SIGEN_ID = '0601';
 const TEST_USER_ORDER = ['test_admin', 'test_secretary', 'test_vicedean', 'test_professor', 'test_student'] as const;
 const SIGENU_IMPORT_REQUIRED_MESSAGE = 'No se encontraron los datos base para crear los usuarios de prueba. Primero debe importar los datos del SIGENU en la pagina de importación.';
@@ -85,7 +85,7 @@ async function getRequiredTestSigenuData() {
 
     const student = await StudentModel.findOne({
         careerId: career._id,
-        academicYear: 1,
+        academicYear: 2,
         isActive: true
     })
         .select('_id identification firstName lastName')

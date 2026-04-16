@@ -32,6 +32,42 @@ const average = (values: number[]): number | null => {
     return total / values.length;
 };
 
+const getIsoDate = (value: unknown) => {
+    if (value === null || value === undefined || value === '') return '';
+    const parsedDate = value instanceof Date ? value : new Date(value as string | number | Date);
+    if (Number.isNaN(parsedDate.getTime())) return '';
+    return parsedDate.toISOString();
+};
+
+const getDateRangeFromValue = (value: unknown) => {
+    const isoDate = getIsoDate(value);
+    if (!isoDate) return null;
+
+    const parsedDate = new Date(isoDate);
+    const start = new Date(parsedDate);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(parsedDate);
+    end.setHours(23, 59, 59, 999);
+
+    return { start, end };
+};
+
+const getDateOnlyGroupKey = (value: unknown) => {
+    const range = getDateRangeFromValue(value);
+    return range ? range.start.toISOString() : '';
+};
+
+const getEvaluationScoreGroupKey = (createdAt: unknown) => getIsoDate(createdAt);
+
+const getLegacyEvaluationGroupKey = (registrationDate: unknown, examinationTypeId: string) =>
+    `evaluation:${getDateOnlyGroupKey(registrationDate)}:${examinationTypeId || 'none'}`;
+
+const getHistoryRecordKey = (
+    source: 'evaluationScore' | 'evaluation',
+    createdAt: unknown,
+    examinationTypeId: string
+) => `${source}:${getIsoDate(createdAt)}:${examinationTypeId || 'none'}`;
+
 export async function getSubjectEvaluationHistory(req: Request, res: Response) {
     try {
         const professorId = req.user?.id;
@@ -39,13 +75,33 @@ export async function getSubjectEvaluationHistory(req: Request, res: Response) {
         if (!professorId) return res.status(401).json({ message: 'Usuario no autenticado' });
         if (!subjectId) return res.status(400).json({ message: 'subjectId es requerido' });
 
-        const subject = await SubjectModel.findOne({ _id: subjectId, professorId }).select('_id').lean();
+        const subject = await SubjectModel.findOne({ _id: subjectId, professorId })
+            .select('_id academicYear careerId')
+            .lean();
         if (!subject) return res.status(404).json({ message: 'Asignatura no encontrada' });
 
-        const matriculatedSubjects = await MatriculatedSubjectModel.find({ subjectId }).select('_id').lean();
+        const validStudents = await StudentModel.find({
+            careerId: subject.careerId,
+            academicYear: subject.academicYear
+        })
+            .select('_id')
+            .lean();
+        const validStudentIds = validStudents.map((student) => student._id);
+
+        const matriculatedSubjects = await MatriculatedSubjectModel.find({
+            subjectId,
+            studentId: { $in: validStudentIds },
+            academicYear: subject.academicYear
+        })
+            .select('_id')
+            .lean();
         const matriculatedIds = matriculatedSubjects.map((m) => m._id);
 
-        const evaluations = await EvaluationScoreModel.find({
+        if (matriculatedIds.length === 0) {
+            return res.status(200).json({ data: [] });
+        }
+
+        const evaluationScores = await EvaluationScoreModel.find({
             matriculatedSubjectId: { $in: matriculatedIds }
         })
             .populate('evaluationValueId', 'value')
@@ -53,32 +109,82 @@ export async function getSubjectEvaluationHistory(req: Request, res: Response) {
             .sort({ createdAt: -1 })
             .lean();
 
-        const groupedMap = new Map<string, any>();
-        evaluations.forEach((evaluation: any) => {
-            const createdAtStr = evaluation.createdAt.toISOString();
-            if (!groupedMap.has(createdAtStr)) {
-                groupedMap.set(createdAtStr, {
-                    createdAt: evaluation.createdAt,
+        const syncedSigenIds = evaluationScores
+            .map((evaluation: any) => String(evaluation.sigenId || '').trim())
+            .filter(Boolean);
+
+        const legacyEvaluations = await EvaluationModel.find({
+            matriculatedSubjectId: { $in: matriculatedIds },
+            ...(syncedSigenIds.length > 0 ? { sigenId: { $nin: syncedSigenIds } } : {})
+        })
+            .populate('evaluationValueId', 'value')
+            .populate('examinationTypeId', 'name')
+            .sort({ registrationDate: -1, evaluationDate: -1 })
+            .lean();
+
+        const evaluationScoreGroups = new Map<string, any>();
+        evaluationScores.forEach((evaluation: any) => {
+            const createdAt = evaluation.createdAt instanceof Date ? evaluation.createdAt : new Date(evaluation.createdAt);
+            const groupKey = getEvaluationScoreGroupKey(createdAt);
+            if (!groupKey) return;
+
+            if (!evaluationScoreGroups.has(groupKey)) {
+                const examinationTypeId = evaluation.examinationTypeId?._id ? String(evaluation.examinationTypeId._id) : '';
+                evaluationScoreGroups.set(groupKey, {
+                    createdAt,
                     category: evaluation.category,
-                    examinationTypeId: evaluation.examinationTypeId?._id ? String(evaluation.examinationTypeId._id) : '',
+                    examinationTypeId,
                     examinationType: evaluation.examinationTypeId?.name || '',
                     evaluationDate: evaluation.evaluationDate,
                     description: evaluation.description,
+                    source: 'evaluationScore',
+                    isReadOnly: false,
                     scores: []
                 });
             }
             const numericValue = toNumericScore(evaluation.evaluationValueId?.value);
-            groupedMap.get(createdAtStr).scores.push(numericValue);
+            evaluationScoreGroups.get(groupKey).scores.push(numericValue);
         });
 
-        const data = Array.from(groupedMap.values()).map(group => {
-            const evaluationAverage = average(group.scores);
+        const legacyEvaluationGroups = new Map<string, any>();
+        legacyEvaluations.forEach((evaluation: any) => {
+            const registrationDate = evaluation.registrationDate instanceof Date
+                ? evaluation.registrationDate
+                : new Date(evaluation.registrationDate);
+            const groupedRegistrationDate = getDateOnlyGroupKey(registrationDate);
+            if (!groupedRegistrationDate) return;
 
-            return {
-                ...group,
-                evaluationAverage: evaluationAverage !== null ? Number(evaluationAverage.toFixed(2)) : null
-            };
+            const examinationTypeId = evaluation.examinationTypeId?._id ? String(evaluation.examinationTypeId._id) : '';
+            const legacyGroupKey = getLegacyEvaluationGroupKey(groupedRegistrationDate, examinationTypeId);
+
+            if (!legacyEvaluationGroups.has(legacyGroupKey)) {
+                legacyEvaluationGroups.set(legacyGroupKey, {
+                    createdAt: groupedRegistrationDate,
+                    category: EvaluationCategory.FINAL_EVALUATION,
+                    examinationTypeId,
+                    examinationType: evaluation.examinationTypeId?.name || '',
+                    evaluationDate: evaluation.evaluationDate,
+                    description: '',
+                    source: 'evaluation',
+                    isReadOnly: true,
+                    scores: []
+                });
+            }
+
+            const numericValue = toNumericScore(evaluation.evaluationValueId?.value);
+            legacyEvaluationGroups.get(legacyGroupKey).scores.push(numericValue);
         });
+
+        const data = [...Array.from(evaluationScoreGroups.values()), ...Array.from(legacyEvaluationGroups.values())]
+            .map(group => {
+                const evaluationAverage = average(group.scores);
+                return {
+                    ...group,
+                    recordKey: getHistoryRecordKey(group.source, group.createdAt, group.examinationTypeId),
+                    evaluationAverage: evaluationAverage !== null ? Number(evaluationAverage.toFixed(2)) : null
+                };
+            })
+            .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
         return res.status(200).json({ data });
     } catch (error: any) {
@@ -95,6 +201,8 @@ export async function getSubjectEvaluationBatchDetail(req: Request, res: Respons
         const professorId = req.user?.id;
         const subjectId = req.query.subjectId as string | undefined;
         const createdAt = req.query.createdAt as string | undefined;
+        const source = req.query.source as 'evaluationScore' | 'evaluation' | undefined;
+        const examinationTypeId = req.query.examinationTypeId as string | undefined;
 
         if (!professorId) {
             return res.status(401).json({ message: 'Usuario no autenticado' });
@@ -108,19 +216,110 @@ export async function getSubjectEvaluationBatchDetail(req: Request, res: Respons
         if (Number.isNaN(parsedCreatedAt.getTime())) {
             return res.status(400).json({ message: 'createdAt no tiene un formato válido' });
         }
+        const createdAtDayRange = getDateRangeFromValue(parsedCreatedAt);
 
         const subject = await SubjectModel.findOne({ _id: subjectId, professorId })
-            .select('_id')
+            .select('_id name academicYear careerId')
             .lean();
 
         if (!subject) {
             return res.status(404).json({ message: 'Asignatura no encontrada' });
         }
 
-        const matriculatedSubjects = await MatriculatedSubjectModel.find({ subjectId })
+        const validStudents = await StudentModel.find({
+            careerId: subject.careerId,
+            academicYear: subject.academicYear
+        })
+            .select('_id')
+            .lean();
+        const validStudentIds = validStudents.map((student) => student._id);
+
+        const matriculatedSubjects = await MatriculatedSubjectModel.find({
+            subjectId,
+            studentId: { $in: validStudentIds },
+            academicYear: subject.academicYear
+        })
             .select('_id')
             .lean();
         const matriculatedIds = matriculatedSubjects.map((item) => item._id);
+
+        if (source === 'evaluation') {
+            if (!examinationTypeId) {
+                return res.status(400).json({ message: 'examinationTypeId es requerido para registros históricos' });
+            }
+            if (!createdAtDayRange) {
+                return res.status(400).json({ message: 'createdAt no tiene un formato válido' });
+            }
+
+            const syncedSigenIds = await EvaluationScoreModel.find({
+                matriculatedSubjectId: { $in: matriculatedIds },
+                sigenId: { $exists: true, $ne: null }
+            })
+                .select('sigenId')
+                .lean();
+
+            const legacyEvaluations = await EvaluationModel.find({
+                matriculatedSubjectId: { $in: matriculatedIds },
+                registrationDate: {
+                    $gte: createdAtDayRange.start,
+                    $lte: createdAtDayRange.end
+                },
+                examinationTypeId,
+                ...(syncedSigenIds.length > 0
+                    ? {
+                        sigenId: {
+                            $nin: syncedSigenIds
+                                .map((item) => String(item.sigenId || '').trim())
+                                .filter(Boolean)
+                        }
+                    }
+                    : {})
+            })
+                .populate('studentId', 'firstName lastName')
+                .populate('evaluationValueId', 'value')
+                .populate('examinationTypeId', 'name')
+                .sort({ studentId: 1 })
+                .lean();
+
+            if (legacyEvaluations.length === 0) {
+                return res.status(404).json({ message: 'No se encontraron registros para esta evaluación' });
+            }
+
+            const firstEvaluation = legacyEvaluations[0] as any;
+            const scores = legacyEvaluations.map((item: any) => toNumericScore(item.evaluationValueId?.value));
+            const data = legacyEvaluations
+                .map((item: any) => ({
+                    _id: String(item._id),
+                    studentId: String(item.studentId?._id || ''),
+                    studentName: `${item.studentId?.firstName || ''} ${item.studentId?.lastName || ''}`.trim() || 'Sin nombre',
+                    evaluationValue: item.evaluationValueId?.value || ''
+                }))
+                .sort((a, b) => a.studentName.localeCompare(b.studentName, 'es'));
+
+            const batchEvaluationAverage = average(scores);
+
+            return res.status(200).json({
+                batch: {
+                    createdAt: getDateOnlyGroupKey(firstEvaluation.registrationDate),
+                    category: EvaluationCategory.FINAL_EVALUATION,
+                    examinationTypeId: firstEvaluation.examinationTypeId?._id ? String(firstEvaluation.examinationTypeId._id) : '',
+                    examinationType: firstEvaluation.examinationTypeId?.name || '',
+                    evaluationDate: firstEvaluation.evaluationDate,
+                    description: '',
+                    source: 'evaluation',
+                    isReadOnly: true,
+                    recordKey: getHistoryRecordKey(
+                        'evaluation',
+                        getDateOnlyGroupKey(firstEvaluation.registrationDate),
+                        firstEvaluation.examinationTypeId?._id ? String(firstEvaluation.examinationTypeId._id) : ''
+                    ),
+                    evaluationAverage: batchEvaluationAverage !== null ? Number(batchEvaluationAverage.toFixed(2)) : null,
+                    subjectName: subject.name || ''
+                },
+                data,
+                totalCount: data.length
+            });
+        }
 
         const evaluations = await EvaluationScoreModel.find({
             matriculatedSubjectId: { $in: matriculatedIds },
@@ -158,6 +357,13 @@ export async function getSubjectEvaluationBatchDetail(req: Request, res: Respons
                 examinationType: firstEvaluation.examinationTypeId?.name || '',
                 evaluationDate: firstEvaluation.evaluationDate,
                 description: firstEvaluation.description || '',
+                source: 'evaluationScore',
+                isReadOnly: false,
+                recordKey: getHistoryRecordKey(
+                    'evaluationScore',
+                    firstEvaluation.createdAt,
+                    firstEvaluation.examinationTypeId?._id ? String(firstEvaluation.examinationTypeId._id) : ''
+                ),
                 evaluationAverage: batchEvaluationAverage !== null ? Number(batchEvaluationAverage.toFixed(2)) : null,
                 subjectName: subject.name || ''
             },
@@ -537,7 +743,7 @@ export async function getSubjectStudentsSummary(req: Request, res: Response) {
         const matriculatedIds = matriculatedSubjects.map((item) => item._id);
         const studentIds = matriculatedSubjects.map((item) => item.studentId?._id).filter(Boolean);
 
-        const [attendanceRows, evaluationRows] = await Promise.all([
+        const [attendanceRows, evaluationRows, legacyEvaluationRows] = await Promise.all([
             AttendanceModel.aggregate([
                 {
                     $match: {
@@ -562,6 +768,12 @@ export async function getSubjectStudentsSummary(req: Request, res: Response) {
             })
                 .populate('evaluationValueId', 'value')
                 .select('matriculatedSubjectId category evaluationValueId')
+                .lean(),
+            EvaluationModel.find({
+                matriculatedSubjectId: { $in: matriculatedIds }
+            })
+                .populate('evaluationValueId', 'value')
+                .select('sigenId matriculatedSubjectId evaluationValueId')
                 .lean()
         ]);
 
@@ -592,6 +804,27 @@ export async function getSubjectStudentsSummary(req: Request, res: Response) {
             const key = String(evaluation.matriculatedSubjectId);
             const current = evaluationRowsByMatriculated.get(key) || [];
             current.push(evaluation as unknown as EvaluationRowForAverage);
+            evaluationRowsByMatriculated.set(key, current);
+        });
+
+        const syncedSigenIds = new Set(
+            evaluationRows
+                .map((evaluation: any) => String(evaluation.sigenId || '').trim())
+                .filter(Boolean)
+        );
+
+        legacyEvaluationRows.forEach((evaluation: any) => {
+            if (evaluation.sigenId && syncedSigenIds.has(String(evaluation.sigenId))) {
+                return;
+            }
+
+            const key = String(evaluation.matriculatedSubjectId);
+            const current = evaluationRowsByMatriculated.get(key) || [];
+            current.push({
+                matriculatedSubjectId: evaluation.matriculatedSubjectId,
+                category: EvaluationCategory.FINAL_EVALUATION,
+                evaluationValueId: evaluation.evaluationValueId as { value?: string } | null
+            });
             evaluationRowsByMatriculated.set(key, current);
         });
 
@@ -692,22 +925,99 @@ export async function getStudentEvaluationRecords(req: Request, res: Response) {
             matriculatedSubjectId: { $in: matriculatedIds }
         };
 
-        const [rows, totalCount] = await Promise.all([
+        const [evaluationScoreRows, legacyEvaluationRows] = await Promise.all([
             EvaluationScoreModel.find(filter)
                 .populate('evaluationValueId', 'value')
                 .populate('examinationTypeId', 'name')
                 .sort({ evaluationDate: -1, updatedAt: -1 })
-                .skip(skip)
-                .limit(limit)
                 .lean(),
-            EvaluationScoreModel.countDocuments(filter)
+            EvaluationModel.find({
+                studentId,
+                matriculatedSubjectId: { $in: matriculatedIds }
+            })
+                .populate('evaluationValueId', 'value')
+                .populate('examinationTypeId', 'name')
+                .sort({ evaluationDate: -1, registrationDate: -1 })
+                .lean()
         ]);
 
+        const syncedSigenIds = new Set(
+            evaluationScoreRows
+                .map((evaluation: any) => String(evaluation.sigenId || '').trim())
+                .filter(Boolean)
+        );
+
+        const rows = [
+            ...evaluationScoreRows.map((row: any) => ({
+                ...row,
+                recordKey: `evaluationScore:${String(row._id)}`,
+                source: 'evaluationScore',
+                isReadOnly: false
+            })),
+            ...legacyEvaluationRows
+                .filter((row: any) => !row.sigenId || !syncedSigenIds.has(String(row.sigenId)))
+                .map((row: any) => ({
+                    ...row,
+                    category: EvaluationCategory.FINAL_EVALUATION,
+                    description: '',
+                    recordKey: `evaluation:${String(row._id)}`,
+                    source: 'evaluation',
+                    isReadOnly: true
+                }))
+        ]
+            .sort((a: any, b: any) => {
+                const dateDiff = new Date(b.evaluationDate).getTime() - new Date(a.evaluationDate).getTime();
+                if (dateDiff !== 0) return dateDiff;
+                const updatedA = new Date(a.updatedAt || a.registrationDate || a.createdAt || 0).getTime();
+                const updatedB = new Date(b.updatedAt || b.registrationDate || b.createdAt || 0).getTime();
+                return updatedB - updatedA;
+            });
+
+        const evaluationRowsByMatriculated = new Map<string, EvaluationRowForAverage[]>();
+        evaluationScoreRows.forEach((evaluation: any) => {
+            const key = String(evaluation.matriculatedSubjectId);
+            const current = evaluationRowsByMatriculated.get(key) || [];
+            current.push(evaluation as unknown as EvaluationRowForAverage);
+            evaluationRowsByMatriculated.set(key, current);
+        });
+
+        legacyEvaluationRows.forEach((evaluation: any) => {
+            if (evaluation.sigenId && syncedSigenIds.has(String(evaluation.sigenId))) {
+                return;
+            }
+
+            const key = String(evaluation.matriculatedSubjectId);
+            const current = evaluationRowsByMatriculated.get(key) || [];
+            current.push({
+                matriculatedSubjectId: evaluation.matriculatedSubjectId,
+                category: EvaluationCategory.FINAL_EVALUATION,
+                evaluationValueId: evaluation.evaluationValueId as { value?: string } | null
+            });
+            evaluationRowsByMatriculated.set(key, current);
+        });
+
+        const matriculatedIdsBySubjectStudent = new Map<string, string[]>();
+        matriculatedIdsBySubjectStudent.set(
+            getSubjectStudentKey(subjectId, studentId),
+            matriculatedIds.map((item) => String(item))
+        );
+
+        const evaluationAverage = calculateSubjectEvaluationAverageForStudent(
+            subjectId,
+            studentId,
+            matriculatedIdsBySubjectStudent,
+            evaluationRowsByMatriculated
+        );
+        const paginatedRows = rows.slice(skip, skip + limit);
+
         return res.status(200).json({
-            data: rows,
-            totalCount,
+            data: paginatedRows,
+            totalCount: rows.length,
             page,
-            limit
+            limit,
+            summary: {
+                evaluationAverage
+            }
         });
     } catch (error: any) {
         console.error('Error in getStudentEvaluationRecords:', error);

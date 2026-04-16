@@ -75,27 +75,7 @@ export const SyncService = {
                     continue;
                 }
 
-                let sigenEvaluationId: string | null = score.sigenId || null;
-
-                if (!sigenEvaluationId) {
-                    const checkSql = `
-                        SELECT id_evaluation 
-                        FROM public.evaluation 
-                        WHERE student_fk = $1 
-                          AND matriculated_subject_fk = $2 
-                          AND examination_type_fk = $3
-                    `;
-
-                    const existing = await DatabaseService.getRows(checkSql, [
-                        student.sigenId,
-                        matriculated.sigenId,
-                        type.sigenId
-                    ]);
-
-                    if (existing.length > 0) {
-                        sigenEvaluationId = existing[0].id_evaluation;
-                    }
-                }
+                const sigenEvaluationId: string | null = score.sigenId || null;
 
                 const now = new Date();
 

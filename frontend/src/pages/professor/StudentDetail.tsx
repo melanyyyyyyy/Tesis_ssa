@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
     Alert,
@@ -56,6 +56,9 @@ interface EvaluationValueRef {
 
 interface EvaluationRecord {
     _id: string;
+    recordKey: string;
+    source: 'evaluationScore' | 'evaluation';
+    isReadOnly: boolean;
     matriculatedSubjectId?: string;
     category: string;
     examinationTypeId?: EvaluationTypeRef | null;
@@ -95,6 +98,7 @@ const StudentDetail: React.FC = () => {
     const navigate = useNavigate();
     const location = useLocation();
     const { token, logout } = useAuth();
+    const initialState = location.state as StudentDetailState | null;
     const [refreshKey, setRefreshKey] = useState(0);
     const [infoMessage, setInfoMessage] = useState<string | null>(null);
     const [savingEdit, setSavingEdit] = useState(false);
@@ -104,6 +108,11 @@ const StudentDetail: React.FC = () => {
     const [selectedAttendance, setSelectedAttendance] = useState<AttendanceRecord | null>(null);
     const [evaluationValues, setEvaluationValues] = useState<SelectOption[]>([]);
     const [selectedEvaluationValueId, setSelectedEvaluationValueId] = useState('');
+    const [evaluationAverage, setEvaluationAverage] = useState<number | null>(() =>
+        typeof initialState?.studentSummary?.evaluationAverage === 'number'
+            ? initialState.studentSummary.evaluationAverage
+            : null
+    );
     const [attendanceIsPresent, setAttendanceIsPresent] = useState(false);
     const [attendanceJustified, setAttendanceJustified] = useState(false);
     const [attendanceReason, setAttendanceReason] = useState('');
@@ -211,6 +220,47 @@ const StudentDetail: React.FC = () => {
         studentId: detail?.studentSummary.studentId || ''
     }), [detail]);
 
+    const loadEvaluationSummary = useCallback(async () => {
+        if (!token || !detail) return;
+
+        try {
+            const params = new URLSearchParams({
+                ...studentTableQueryParams,
+                page: '0',
+                limit: '1'
+            });
+            const response = await fetch(`${API_BASE}/professor/student-evaluation-records?${params.toString()}`, {
+                headers: {
+                    Authorization: `Bearer ${token}`
+                }
+            });
+
+            if (response.status === 401) {
+                logout();
+                return;
+            }
+
+            if (!response.ok) {
+                throw new Error('No se pudo cargar el promedio de evaluación');
+            }
+
+            const result = await response.json() as {
+                summary?: {
+                    evaluationAverage?: number | null;
+                };
+            };
+            setEvaluationAverage(typeof result.summary?.evaluationAverage === 'number'
+                ? result.summary.evaluationAverage
+                : null);
+        } catch (error) {
+            setInfoMessage(error instanceof Error ? error.message : 'No se pudo cargar el promedio de evaluación');
+        }
+    }, [detail, logout, studentTableQueryParams, token]);
+
+    useEffect(() => {
+        void loadEvaluationSummary();
+    }, [loadEvaluationSummary, refreshKey]);
+
     const loadEvaluationValues = async () => {
         if (!token || !detail) return;
         if (evaluationValues.length > 0) return;
@@ -236,6 +286,7 @@ const StudentDetail: React.FC = () => {
     };
 
     const handleOpenEvaluationEdit = async (row: EvaluationRecord) => {
+        if (row.isReadOnly) return;
         try {
             setInfoMessage(null);
             await loadEvaluationValues();
@@ -367,9 +418,18 @@ const StudentDetail: React.FC = () => {
         {
             variant: 'edit',
             label: 'Editar',
+            hidden: (row) => row.isReadOnly,
             onClick: (row) => {
                 void handleOpenEvaluationEdit(row);
             }
+        },
+        {
+            label: '-',
+            icon: <Typography variant="body2" color="text.secondary">-</Typography>,
+            color: 'default',
+            hidden: (row) => !row.isReadOnly,
+            disabled: () => true,
+            onClick: () => {}
         }
     ], [evaluationValues.length, token, detail, logout]);
 
@@ -400,8 +460,8 @@ const StudentDetail: React.FC = () => {
         ? `Promedio de asistencia: ${detail.studentSummary.attendanceAverage.toFixed(2)}%`
         : 'Sin registros de asistencia';
 
-    const evaluationLabel = (typeof detail.studentSummary.evaluationAverage === 'number')
-        ? `Promedio de evaluación: ${detail.studentSummary.evaluationAverage.toFixed(2)}`
+    const evaluationLabel = (typeof evaluationAverage === 'number')
+        ? `Promedio de evaluación: ${evaluationAverage.toFixed(2)}`
         : 'Sin registros de evaluación';
 
     return (
@@ -488,7 +548,7 @@ const StudentDetail: React.FC = () => {
                         token={token}
                         columns={evaluationColumns}
                         actions={evaluationActions}
-                        rowKey="_id"
+                        rowKey="recordKey"
                         serverPagination={true}
                         refreshKey={refreshKey}
                         queryParams={studentTableQueryParams}

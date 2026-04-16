@@ -48,8 +48,10 @@ const MatriculatedSubjectSchema = new Schema<IMatriculatedSubject>(
     }
 );
 
+/*
 MatriculatedSubjectSchema.index({ studentId: 1, subjectId: 1, academicYear: 1});
 MatriculatedSubjectSchema.index({ studentId: 1, evaluated: 1 });
+*/
 
 MatriculatedSubjectSchema.methods.toJSON = function () {
     const obj = this.toObject();

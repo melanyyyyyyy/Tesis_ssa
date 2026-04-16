@@ -22,13 +22,16 @@ interface SubjectReference {
 }
 
 interface EvaluationHistoryRecord {
+    recordKey: string;
     createdAt: string;
     category: string;
+    source: 'evaluationScore' | 'evaluation';
+    isReadOnly: boolean;
     examinationTypeId: string;
     examinationType: string;
     evaluationDate: string;
     description: string;
-    evaluationAverage: number;
+    evaluationAverage: number | null;
 }
 
 interface AttendanceHistoryRecord {
@@ -131,7 +134,7 @@ const HistoryRecords: React.FC = () => {
         { 
             field: 'evaluationAverage', 
             headerName: 'Promedio de Evaluación',
-            renderCell: (value) => Number(value).toFixed(2)
+            renderCell: (value) => value === null || value === undefined ? '—' : Number(value).toFixed(2)
         }
     ], []);
 
@@ -162,6 +165,7 @@ const HistoryRecords: React.FC = () => {
         {
             variant: 'edit' as const,
             label: 'Editar',
+            hidden: (row: EvaluationHistoryRecord) => row.isReadOnly,
             onClick: (row: EvaluationHistoryRecord) => navigate('/professor/records-evaluation-edit', {
                 state: {
                     subject: selectedSubject,
@@ -174,6 +178,7 @@ const HistoryRecords: React.FC = () => {
         {
             variant: 'delete' as const,
             label: 'Eliminar',
+            hidden: (row: EvaluationHistoryRecord) => row.isReadOnly,
             onClick: (row: EvaluationHistoryRecord) => handleDeleteClick('evaluation', row)
         }
     ], [navigate, selectedSubject]);
@@ -264,7 +269,7 @@ const HistoryRecords: React.FC = () => {
                             columns={evaluationColumns}
                             queryParams={{ subjectId: selectedSubject?._id }}
                             actions={evaluationActions}
-                            rowKey="createdAt"
+                            rowKey="recordKey"
                             refreshKey={refreshKey}
                         />
                     </Card>

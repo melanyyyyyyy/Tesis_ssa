@@ -430,25 +430,25 @@ export const MigrationService = {
             d.career_fk            AS career_fk,
             s.year                 AS academic_year
         FROM public.subject s
-        LEFT JOIN public.subject_name sn
-            ON s.subject_name_fk = sn.subject_name_id
-        LEFT JOIN public.discipline d
-            ON s.discipline_fk = d.discipline_id
-        JOIN public.career c
-            ON d.career_fk = c.id_career
-        JOIN public.matriculated_subject ms
-            ON ms.subject_fk = s.subject_id
-        JOIN public.student stu
-            ON ms.student_fk = stu.id_student
-        JOIN public.course_type ct
-            ON stu.course_type_fk = ct.id_course_type
+        LEFT JOIN public.subject_name sn ON s.subject_name_fk = sn.subject_name_id
+        LEFT JOIN public.discipline d ON s.discipline_fk = d.discipline_id
+        JOIN public.career c ON d.career_fk = c.id_career
+        JOIN public.matriculated_subject ms ON ms.subject_fk = s.subject_id
+        JOIN public.student stu ON ms.student_fk = stu.id_student
+        JOIN public.course_type ct ON stu.course_type_fk = ct.id_course_type
         WHERE s.cancelled = false               
             AND ms.cancelled = false            
+            AND c.cancelled = false
             AND s.year BETWEEN 1 AND 6          
-            AND d.career_fk IS NOT NULL         
-            AND c.faculty_fk IS NOT NULL        
             AND stu.student_status_fk = '02'
-            AND ct.name IN ('Curso Diurno', 'Curso por Encuentros');
+            AND ct.name IN ('Curso Diurno', 'Curso por Encuentros')
+            AND stu.career_fk = d.career_fk
+            AND s.year = (
+                SELECT MAX(ms_inner.year)
+                FROM public.matriculated_subject ms_inner
+                WHERE ms_inner.student_fk = stu.id_student 
+                AND ms_inner.cancelled = false
+            );
     `);
 
         let bulkOps = [];
@@ -607,6 +607,15 @@ export const MigrationService = {
             executedBatches++;
             console.log(`[Matriculated Subjects] Final batch ${executedBatches} completed in ${Date.now() - batchStartedAt} ms. Scanned: ${scannedRows}/${rows.length}. Inserted/Updated: ${count}. Missing references: ${missingReferences}. Write errors: ${writeErrors}. Elapsed: ${Date.now() - stageStartedAt} ms.`);
         }
+
+        console.log('[Matriculated Subjects] Removing subjects without matriculated subjects...');
+        const cleanupStartedAt = Date.now();
+        const referencedSubjectIds = await MatriculatedSubjectModel.distinct('subjectId');
+        const cleanupFilter = referencedSubjectIds.length > 0
+            ? { _id: { $nin: referencedSubjectIds } }
+            : {};
+        const deletedSubjectsResult = await SubjectModel.deleteMany(cleanupFilter);
+        console.log(`[Matriculated Subjects] Subject cleanup completed in ${Date.now() - cleanupStartedAt} ms. Deleted orphan subjects: ${deletedSubjectsResult.deletedCount || 0}.`);
 
         console.log(`Matricules processed: ${count}. Missing references: ${missingReferences}. Write errors: ${writeErrors}. Total elapsed: ${Date.now() - stageStartedAt} ms.`);
     },

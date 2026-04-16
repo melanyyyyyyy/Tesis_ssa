@@ -9,6 +9,7 @@ import {
     UserModel
 } from '../models/system/index.js';
 import {
+    CareerModel,
     MatriculatedSubjectModel,
     StudentModel,
     SubjectModel
@@ -56,6 +57,26 @@ const mapConversation = (conversation: any) => ({
     lastMessage: conversation?.lastMessage ? mapMessage(conversation.lastMessage) : null,
     updatedAt: conversation?.updatedAt
 });
+
+const getStudentIdentity = async (studentUserId: string) => {
+    const user = await UserModel.findById(studentUserId)
+        .select('_id firstName lastName email studentId')
+        .lean();
+
+    if (!user?.studentId) {
+        throw new Error('El estudiante autenticado no tiene un perfil academico vinculado.');
+    }
+
+    const student = await StudentModel.findById(user.studentId)
+        .select('_id firstName lastName careerId academicYear')
+        .lean();
+
+    if (!student) {
+        throw new Error('No se encontro la informacion academica del estudiante autenticado.');
+    }
+
+    return { user, student };
+};
 
 const buildProfessorChatLink = (params: {
     subjectId: string;
@@ -259,9 +280,98 @@ const getAccessibleConversation = async (conversationId: string, userId: string)
     return conversation;
 };
 
-const createChatNotificationsForRecipients = async (params: {
+const buildChatNotificationPreview = (content: string) => (
+    content.length > 90 ? `${content.slice(0, 87)}...` : content
+);
+
+const buildChatNotificationContent = (params: {
+    conversation: any;
+    recipientId: string;
+    senderName: string;
+    preview: string;
+    subject: any;
+}) => {
+    const professorUserId = params.subject.professorId ? String(params.subject.professorId) : '';
+    const isProfessorRecipient = params.recipientId === professorUserId;
+
+    return {
+        title: isProfessorRecipient
+            ? (params.conversation.kind === 'group'
+                ? `Nuevo mensaje en ${params.subject.name}`
+                : `Nuevo mensaje de ${params.senderName}`)
+            : (params.conversation.kind === 'group'
+                ? `Nuevo mensaje en ${params.subject.name}`
+                : 'Nuevo mensaje del profesor'),
+        message: params.conversation.kind === 'group'
+            ? `${params.senderName} escribió en el grupo de la asignatura ${params.subject.name}: "${params.preview}"`
+            : `${params.senderName} te envió un mensaje privado sobre ${params.subject.name}: "${params.preview}"`,
+        link: isProfessorRecipient
+            ? buildProfessorChatLink({
+                subjectId: String(params.subject._id),
+                conversationId: String(params.conversation._id),
+                subjectName: params.subject.name,
+                academicYear: params.subject.academicYear
+            })
+            : '/student/chat'
+    };
+};
+
+const markChatNotificationAsRead = async (conversationId: string, recipientUserId: string) => {
+    await NotificationModel.updateOne(
+        {
+            recipientId: new Types.ObjectId(recipientUserId),
+            conversationId: new Types.ObjectId(conversationId),
+            type: 'NEW_MESSAGE',
+            isRead: false
+        },
+        {
+            $set: {
+                isRead: true,
+                updatedAt: new Date()
+            }
+        }
+    );
+};
+
+const collapseChatNotificationDuplicates = async (conversationId: string, recipientIds: string[]) => {
+    if (recipientIds.length === 0) {
+        return;
+    }
+
+    const recipientObjectIds = recipientIds.map((recipientId) => new Types.ObjectId(recipientId));
+    const existingNotifications = await NotificationModel.find({
+        type: 'NEW_MESSAGE',
+        conversationId: new Types.ObjectId(conversationId),
+        recipientId: { $in: recipientObjectIds }
+    })
+        .select('_id recipientId updatedAt createdAt')
+        .sort({ updatedAt: -1, createdAt: -1, _id: -1 })
+        .lean();
+
+    const keptRecipientIds = new Set<string>();
+    const duplicateIdsToDelete: Types.ObjectId[] = [];
+
+    for (const notification of existingNotifications) {
+        const recipientId = String(notification.recipientId);
+        if (!keptRecipientIds.has(recipientId)) {
+            keptRecipientIds.add(recipientId);
+            continue;
+        }
+
+        duplicateIdsToDelete.push(notification._id);
+    }
+
+    if (duplicateIdsToDelete.length > 0) {
+        await NotificationModel.deleteMany({
+            _id: { $in: duplicateIdsToDelete }
+        });
+    }
+};
+
+const upsertChatNotificationsForRecipients = async (params: {
     conversation: any;
     senderUserId: string;
+    messageId: string;
     messageContent: string;
 }) => {
     const subject = await SubjectModel.findById(params.conversation.subjectId)
@@ -277,9 +387,7 @@ const createChatNotificationsForRecipients = async (params: {
         .lean();
 
     const senderName = `${senderUser?.firstName || ''} ${senderUser?.lastName || ''}`.trim() || 'Un usuario';
-    const preview = params.messageContent.length > 90
-        ? `${params.messageContent.slice(0, 87)}...`
-        : params.messageContent;
+    const preview = buildChatNotificationPreview(params.messageContent);
 
     const recipientIds = uniqueStrings(
         Array.isArray(params.conversation.participants)
@@ -291,43 +399,142 @@ const createChatNotificationsForRecipients = async (params: {
         return;
     }
 
-    const professorUserId = subject.professorId ? String(subject.professorId) : '';
+    await collapseChatNotificationDuplicates(String(params.conversation._id), recipientIds);
 
-    await NotificationModel.insertMany(
+    const conversationObjectId = new Types.ObjectId(String(params.conversation._id));
+    const senderObjectId = new Types.ObjectId(params.senderUserId);
+    const lastMessageObjectId = new Types.ObjectId(params.messageId);
+    const now = new Date();
+
+    await NotificationModel.bulkWrite(
         recipientIds.map((recipientId) => {
-            const isProfessorRecipient = recipientId === professorUserId;
-            const title = isProfessorRecipient
-                ? (params.conversation.kind === 'group'
-                    ? `Nuevo mensaje en ${subject.name}`
-                    : `Nuevo mensaje de ${senderName}`)
-                : (params.conversation.kind === 'group'
-                    ? `Nuevo mensaje en ${subject.name}`
-                    : `Nuevo mensaje del profesor`);
-            const message = isProfessorRecipient
-                ? (params.conversation.kind === 'group'
-                    ? `${senderName} escribió en el grupo de la asignatura ${subject.name}: "${preview}"`
-                    : `${senderName} te envió un mensaje privado sobre ${subject.name}: "${preview}"`)
-                : (params.conversation.kind === 'group'
-                    ? `${senderName} escribió en el grupo de la asignatura ${subject.name}: "${preview}"`
-                    : `${senderName} te envió un mensaje privado sobre ${subject.name}: "${preview}"`);
+            const recipientObjectId = new Types.ObjectId(recipientId);
+            const notificationContent = buildChatNotificationContent({
+                conversation: params.conversation,
+                recipientId,
+                senderName,
+                preview,
+                subject
+            });
 
             return {
-                recipientId: new Types.ObjectId(recipientId),
-                title,
-                message,
-                type: 'NEW_MESSAGE',
-                link: isProfessorRecipient
-                    ? buildProfessorChatLink({
-                        subjectId: String(subject._id),
-                        conversationId: String(params.conversation._id),
-                        subjectName: subject.name,
-                        academicYear: subject.academicYear
-                    })
-                    : '/student/chat'
+                updateOne: {
+                    filter: {
+                        recipientId: recipientObjectId,
+                        conversationId: conversationObjectId,
+                        type: 'NEW_MESSAGE'
+                    },
+                    update: {
+                        $set: {
+                            ...notificationContent,
+                            senderId: senderObjectId,
+                            lastMessageId: lastMessageObjectId,
+                            isRead: false,
+                            updatedAt: now
+                        },
+                        $setOnInsert: {
+                            recipientId: recipientObjectId,
+                            conversationId: conversationObjectId,
+                            type: 'NEW_MESSAGE',
+                            createdAt: now
+                        }
+                    },
+                    upsert: true
+                }
             };
         }),
         { ordered: false }
     );
+};
+
+const syncChatNotificationsAfterMessageDeletion = async (params: {
+    conversation: any;
+    deletedMessageId: string;
+    conversationId: string;
+}) => {
+    const notifications = await NotificationModel.find({
+        type: 'NEW_MESSAGE',
+        conversationId: new Types.ObjectId(params.conversationId),
+        lastMessageId: new Types.ObjectId(params.deletedMessageId)
+    })
+        .select('_id recipientId isRead')
+        .lean();
+
+    if (notifications.length === 0) {
+        return;
+    }
+
+    const subject = await SubjectModel.findById(params.conversation.subjectId)
+        .select('_id name academicYear professorId')
+        .lean();
+
+    if (!subject) {
+        await NotificationModel.deleteMany({
+            _id: { $in: notifications.map((notification) => notification._id) }
+        });
+        return;
+    }
+
+    const bulkOps = [];
+    const now = new Date();
+
+    for (const notification of notifications) {
+        if (notification.isRead) {
+            bulkOps.push({
+                deleteOne: {
+                    filter: { _id: notification._id }
+                }
+            });
+            continue;
+        }
+
+        const recipientId = String(notification.recipientId);
+        const previousIncomingMessage = await MessageModel.findOne({
+            conversationId: new Types.ObjectId(params.conversationId),
+            senderId: { $ne: new Types.ObjectId(recipientId) }
+        })
+            .populate('senderId', 'firstName lastName email')
+            .sort({ createdAt: -1 })
+            .lean();
+
+        if (!previousIncomingMessage) {
+            bulkOps.push({
+                deleteOne: {
+                    filter: { _id: notification._id }
+                }
+            });
+            continue;
+        }
+
+        const sender = mapMessageSender((previousIncomingMessage as any).senderId);
+        const senderName = `${sender.firstName || ''} ${sender.lastName || ''}`.trim() || 'Un usuario';
+        const notificationContent = buildChatNotificationContent({
+            conversation: params.conversation,
+            recipientId,
+            senderName,
+            preview: buildChatNotificationPreview(previousIncomingMessage.content || ''),
+            subject
+        });
+
+        bulkOps.push({
+            updateOne: {
+                filter: { _id: notification._id },
+                update: {
+                    $set: {
+                        ...notificationContent,
+                        senderId: new Types.ObjectId(String(sender._id)),
+                        lastMessageId: new Types.ObjectId(String(previousIncomingMessage._id)),
+                        isRead: false,
+                        updatedAt: now
+                    }
+                }
+            }
+        });
+    }
+
+    if (bulkOps.length > 0) {
+        await NotificationModel.bulkWrite(bulkOps, { ordered: false });
+    }
 };
 
 export const ChatService = {
@@ -393,6 +600,7 @@ export const ChatService = {
 
     async getConversationMessages(conversationId: string, userId: string, page = 0, limit = 100) {
         await getAccessibleConversation(conversationId, userId);
+        await markChatNotificationAsRead(conversationId, userId);
 
         const skip = page * limit;
         const [messages, totalCount] = await Promise.all([
@@ -413,6 +621,150 @@ export const ChatService = {
         };
     },
 
+    async getStudentConversations(studentUserId: string) {
+        const { user, student } = await getStudentIdentity(studentUserId);
+
+        const enrolledRows = await MatriculatedSubjectModel.find({
+            studentId: student._id,
+            academicYear: student.academicYear
+        })
+            .select('subjectId')
+            .lean();
+
+        const enrolledSubjectIds = uniqueStrings(enrolledRows.map((row) => String(row.subjectId)));
+        if (enrolledSubjectIds.length === 0) {
+            return { conversations: [] };
+        }
+
+        const [subjects, career] = await Promise.all([
+            SubjectModel.find({
+                _id: { $in: enrolledSubjectIds },
+                careerId: student.careerId,
+                academicYear: student.academicYear,
+                professorId: { $exists: true, $ne: null }
+            })
+                .select('_id name academicYear careerId professorId')
+                .sort({ name: 1 })
+                .lean(),
+            CareerModel.findById(student.careerId).select('name').lean()
+        ]);
+
+        if (subjects.length === 0) {
+            return { conversations: [] };
+        }
+
+        const professorIds = uniqueStrings(subjects.map((subject) => (
+            subject.professorId ? String(subject.professorId) : null
+        )));
+
+        const professorUsers = await UserModel.find({
+            _id: { $in: professorIds }
+        })
+            .select('_id firstName lastName')
+            .lean();
+
+        const professorNameById = new Map(
+            professorUsers.map((professor) => [
+                String(professor._id),
+                `${professor.firstName || ''} ${professor.lastName || ''}`.trim() || 'Profesor'
+            ])
+        );
+
+        const conversationIds: string[] = [];
+        const conversationMetadataById = new Map<string, {
+            subjectName: string;
+            careerName: string;
+            academicYear: number;
+            professorUserId: string | null;
+            participantCount: number;
+            privateTitle: string;
+        }>();
+
+        for (const subject of subjects) {
+            const professorUserId = subject.professorId ? String(subject.professorId) : '';
+            if (!professorUserId) {
+                continue;
+            }
+
+            const eligibleStudents = await getEligibleStudentsForSubject(subject);
+            const groupConversation = await ensureGroupConversation(subject, professorUserId, eligibleStudents);
+            const privateConversation = await ensurePrivateConversation(subject, professorUserId, {
+                studentId: String(student._id),
+                firstName: student.firstName || user.firstName || '',
+                lastName: student.lastName || user.lastName || '',
+                linkedUser: {
+                    _id: String(user._id)
+                }
+            });
+
+            conversationIds.push(String(groupConversation._id), String(privateConversation._id));
+
+            const careerName = career?.name || 'Sin carrera';
+            const professorName = professorNameById.get(professorUserId) || 'Profesor';
+
+            conversationMetadataById.set(String(groupConversation._id), {
+                subjectName: subject.name,
+                careerName,
+                academicYear: subject.academicYear,
+                professorUserId,
+                participantCount: eligibleStudents.length + 1,
+                privateTitle: professorName
+            });
+
+            conversationMetadataById.set(String(privateConversation._id), {
+                subjectName: subject.name,
+                careerName,
+                academicYear: subject.academicYear,
+                professorUserId,
+                participantCount: 2,
+                privateTitle: professorName
+            });
+        }
+
+        const conversations = await ConversationModel.find({
+            _id: { $in: conversationIds },
+            participants: new Types.ObjectId(studentUserId)
+        })
+            .populate({
+                path: 'lastMessage',
+                populate: {
+                    path: 'senderId',
+                    select: 'firstName lastName email'
+                }
+            })
+            .lean();
+
+        const mappedConversations = conversations
+            .map((conversation) => {
+                const mappedConversation = mapConversation(conversation);
+                const metadata = conversationMetadataById.get(mappedConversation._id);
+
+                return {
+                    ...mappedConversation,
+                    title: mappedConversation.kind === 'private'
+                        ? (metadata?.privateTitle || 'Profesor')
+                        : mappedConversation.title,
+                    participantCount: metadata?.participantCount || mappedConversation.participantCount,
+                    subjectName: metadata?.subjectName || '',
+                    careerName: metadata?.careerName || 'Sin carrera',
+                    academicYear: metadata?.academicYear || 0,
+                    professorUserId: metadata?.professorUserId || null
+                };
+            })
+            .sort((left, right) => {
+                if (left.subjectName !== right.subjectName) {
+                    return (left.subjectName || '').localeCompare(right.subjectName || '', 'es');
+                }
+                if (left.kind === 'group' && right.kind !== 'group') return -1;
+                if (left.kind !== 'group' && right.kind === 'group') return 1;
+                return left.title.localeCompare(right.title, 'es');
+            });
+
+        return {
+            conversations: mappedConversations
+        };
+    },
+
     async createMessage(conversationId: string, senderUserId: string, content: string) {
         const trimmedContent = content.trim();
         if (!trimmedContent) {
@@ -420,6 +772,7 @@ export const ChatService = {
         }
 
         const conversation = await getAccessibleConversation(conversationId, senderUserId);
+        await markChatNotificationAsRead(conversationId, senderUserId);
 
         const createdMessage = await MessageModel.create({
             conversationId: new Types.ObjectId(conversationId),
@@ -437,9 +790,10 @@ export const ChatService = {
 
         const payload = mapMessage(populatedMessage);
 
-        await createChatNotificationsForRecipients({
+        await upsertChatNotificationsForRecipients({
             conversation,
             senderUserId,
+            messageId: String(createdMessage._id),
             messageContent: trimmedContent
         });
 
@@ -471,6 +825,12 @@ export const ChatService = {
 
         await ConversationModel.findByIdAndUpdate(message.conversationId, {
             lastMessage: latestMessage?._id || null
+        });
+
+        await syncChatNotificationsAfterMessageDeletion({
+            conversation,
+            deletedMessageId: messageId,
+            conversationId: String(message.conversationId)
         });
 
         const payload = {

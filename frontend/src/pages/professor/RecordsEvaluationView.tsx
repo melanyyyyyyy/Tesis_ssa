@@ -34,13 +34,16 @@ interface SubjectReference {
 }
 
 interface EvaluationHistoryRecord {
+    recordKey: string;
     createdAt: string;
     category: string;
+    source: 'evaluationScore' | 'evaluation';
+    isReadOnly: boolean;
     examinationTypeId: string;
     examinationType: string;
     evaluationDate: string;
     description: string;
-    evaluationAverage: number;
+    evaluationAverage: number | null;
 }
 
 interface EvaluationBatchStudentRow {
@@ -51,13 +54,16 @@ interface EvaluationBatchStudentRow {
 }
 
 interface EvaluationBatchDetail {
+    recordKey: string;
     createdAt: string;
     category: string;
+    source: 'evaluationScore' | 'evaluation';
+    isReadOnly: boolean;
     examinationTypeId: string;
     examinationType: string;
     evaluationDate: string;
     description: string;
-    evaluationAverage: number;
+    evaluationAverage: number | null;
     subjectName: string;
 }
 
@@ -133,8 +139,12 @@ const RecordsEvaluationView: React.FC = () => {
         try {
             const params = new URLSearchParams({
                 subjectId: selectedSubject._id,
-                createdAt: initialRecord.createdAt
+                createdAt: initialRecord.createdAt,
+                source: initialRecord.source
             });
+            if (initialRecord.examinationTypeId) {
+                params.set('examinationTypeId', initialRecord.examinationTypeId);
+            }
 
             const response = await fetch(`${API_BASE}/professor/evaluation-batch-detail?${params.toString()}`, {
                 headers: {
@@ -158,7 +168,15 @@ const RecordsEvaluationView: React.FC = () => {
         } finally {
             setLoading(false);
         }
-    }, [initialRecord?.createdAt, logout, refreshKey, selectedSubject?._id, token]);
+    }, [
+        initialRecord?.createdAt,
+        initialRecord?.examinationTypeId,
+        initialRecord?.source,
+        logout,
+        refreshKey,
+        selectedSubject?._id,
+        token
+    ]);
 
     useEffect(() => {
         void loadBatchDetail();
@@ -166,6 +184,7 @@ const RecordsEvaluationView: React.FC = () => {
 
     const displayedBatch = batchDetail || initialRecord;
     const subjectName = batchDetail?.subjectName || selectedSubject?.name || 'la asignatura';
+    const isReadOnly = Boolean(displayedBatch?.isReadOnly);
     const handleRefresh = () => setRefreshKey((prev) => prev + 1);
     const pdfTables = useMemo<ExportTableConfig<EvaluationBatchStudentRow>[]>(() => [
         {
@@ -174,7 +193,9 @@ const RecordsEvaluationView: React.FC = () => {
             queryParams: selectedSubject && initialRecord
                 ? {
                     subjectId: selectedSubject._id,
-                    createdAt: initialRecord.createdAt
+                    createdAt: initialRecord.createdAt,
+                    source: initialRecord.source,
+                    examinationTypeId: initialRecord.examinationTypeId
                 }
                 : undefined,
             columns,
@@ -193,7 +214,7 @@ const RecordsEvaluationView: React.FC = () => {
                     title={`Detalles de registro de evaluación de ${subjectName}`}
                     subtitle={
                         displayedBatch
-                            ? `Promedio de evaluación: ${Number(displayedBatch.evaluationAverage || 0).toFixed(2)}`
+                            ? `Promedio de evaluación: ${displayedBatch.evaluationAverage === null ? '—' : Number(displayedBatch.evaluationAverage).toFixed(2)}`
                             : 'No hay evaluación seleccionada.'
                     }
                     showBackButton={true}
@@ -244,6 +265,11 @@ const RecordsEvaluationView: React.FC = () => {
                                 </Box>
                             ) : (
                                 <Stack spacing={1.5}>
+                                    {isReadOnly && (
+                                        <Typography variant="body2" color="text.secondary">
+                                            Registro histórico importado desde SIGENU. Solo está disponible para visualización.
+                                        </Typography>
+                                    )}
                                     <Typography variant="body1">
                                         <strong>Tipo de evaluación:</strong> {categoryLabels[displayedBatch?.category || ''] || displayedBatch?.category || '—'}
                                     </Typography>
@@ -285,7 +311,9 @@ const RecordsEvaluationView: React.FC = () => {
                                 columns={columns}
                                 queryParams={{
                                     subjectId: selectedSubject._id,
-                                    createdAt: initialRecord.createdAt
+                                    createdAt: initialRecord.createdAt,
+                                    source: initialRecord.source,
+                                    examinationTypeId: initialRecord.examinationTypeId
                                 }}
                                 rowKey="_id"
                                 refreshKey={refreshKey}
@@ -298,26 +326,28 @@ const RecordsEvaluationView: React.FC = () => {
                             />
                         </Card>
 
-                        <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
-                            <Button
-                                variant="contained"
-                                color="secondary"
-                                startIcon={<EditIcon />}
-                                onClick={() => navigate('/professor/records-evaluation-edit', {
-                                    state: {
-                                        subject: selectedSubject,
-                                        evaluationRecord: displayedBatch,
-                                        returnTo: '/professor/records-evaluation-view',
-                                        returnState: {
+                        {!isReadOnly && (
+                            <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+                                <Button
+                                    variant="contained"
+                                    color="secondary"
+                                    startIcon={<EditIcon />}
+                                    onClick={() => navigate('/professor/records-evaluation-edit', {
+                                        state: {
                                             subject: selectedSubject,
-                                            evaluationRecord: displayedBatch
+                                            evaluationRecord: displayedBatch,
+                                            returnTo: '/professor/records-evaluation-view',
+                                            returnState: {
+                                                subject: selectedSubject,
+                                                evaluationRecord: displayedBatch
+                                            }
                                         }
-                                    }
-                                })}
-                            >
-                                Editar
-                            </Button>
-                        </Box>
+                                    })}
+                                >
+                                    Editar
+                                </Button>
+                            </Box>
+                        )}
                     </Stack>
                 )}
 

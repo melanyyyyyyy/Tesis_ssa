@@ -33,6 +33,8 @@ import ProfessorDashboard from '../pages/professor/ProfessorDashboard';
 import SubjectDetail from '../pages/professor/SubjectDetail';
 import StudentDetail from '../pages/professor/StudentDetail';
 import ChatPage from '../pages/professor/Chat';
+import StudentDashboard from '../pages/student/StudentDashboard';
+import StudentChatPage from '../pages/student/Chat';
 
 import ProfilePage from '../pages/common/ProfilePage';
 import NotificationPage from '../pages/common/NotificationPage';
@@ -117,6 +119,13 @@ export default function AppRouter() {
           <Route path="/professor/records-evaluation-edit" element={<RecordsEvaluationEdit />} />
           <Route path="/professor/records-evaluation-view" element={<RecordsEvaluationView />} />
           <Route path="/professor/exams" element={<ProfessorExamCalendarPage />} />
+        </Route>
+
+        {/* Student Routes */}
+        <Route element={<ProtectedRoute allowedRoles={['student']} />}>
+          <Route path="/" element={<Navigate to="/student/dashboard" replace />} />
+          <Route path="/student/dashboard" element={<StudentDashboard />} />
+          <Route path="/student/chat" element={<StudentChatPage />} />
         </Route>
 
         {/* Vicedean Routes */}

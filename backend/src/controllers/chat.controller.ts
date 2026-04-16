@@ -39,6 +39,25 @@ export const ChatController = {
         }
     },
 
+    async getStudentConversations(req: Request, res: Response) {
+        try {
+            const userId = String(req.user?.id || '');
+
+            if (!userId) {
+                return res.status(401).json({ message: 'Usuario no autenticado' });
+            }
+
+            const result = await ChatService.getStudentConversations(userId);
+            return res.status(200).json(result);
+        } catch (error: any) {
+            console.error('Error in getStudentConversations:', error);
+            return res.status(getStatusCodeForChatError(error)).json({
+                success: false,
+                error: error.message || 'No se pudieron cargar las conversaciones del estudiante.'
+            });
+        }
+    },
+
     async getConversationMessages(req: Request, res: Response) {
         try {
             const conversationId = String(req.params.conversationId || '');

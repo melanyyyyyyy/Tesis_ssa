@@ -33,6 +33,7 @@ import { ModalDialog } from '../../components/common/ModalDialog';
 import { useAuth } from '../../context/AuthContext';
 
 const API_BASE = import.meta.env.VITE_API_BASE;
+const CHAT_PANEL_HEIGHT = { xs: 420, md: '72vh' };
 
 interface ChatSender {
     _id: string;
@@ -428,7 +429,7 @@ const ChatPage: React.FC = () => {
                         elevation={0}
                         sx={{
                             width: { xs: '100%', md: 380 },
-                            height: { xs: 420, md: '72vh' },
+                            height: CHAT_PANEL_HEIGHT,
                             display: 'flex',
                             flexDirection: 'column',
                             borderRadius: 3,
@@ -533,6 +534,8 @@ const ChatPage: React.FC = () => {
                         elevation={0}
                         sx={{
                             flex: 1,
+                            height: CHAT_PANEL_HEIGHT,
+                            minHeight: 0,
                             display: 'flex',
                             flexDirection: 'column',
                             borderRadius: 3,
@@ -569,6 +572,7 @@ const ChatPage: React.FC = () => {
                                 <Box
                                     sx={{
                                         flex: 1,
+                                        minHeight: 0,
                                         p: 3,
                                         bgcolor: '#f7f9fc',
                                         overflowY: 'auto'

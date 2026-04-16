@@ -7,6 +7,7 @@ const router = Router();
 router.use(authMiddleware);
 
 router.get('/subject-conversations', authorize(['professor']), ChatController.getSubjectConversations);
+router.get('/student-conversations', authorize(['student']), ChatController.getStudentConversations);
 router.get('/conversations/:conversationId/messages', ChatController.getConversationMessages);
 router.post('/conversations/:conversationId/messages', ChatController.createMessage);
 router.delete('/messages/:messageId', ChatController.deleteMessage);
