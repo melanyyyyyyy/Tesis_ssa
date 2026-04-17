@@ -8,6 +8,7 @@ import DownloadIcon from '@mui/icons-material/Download';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import MainLayout from '../../layouts/MainLayout';
 import PageHeader from '../../components/common/PageHeader';
+import { useAuth } from '../../context/AuthContext';
 
 const API_BASE = import.meta.env.VITE_API_BASE;
 
@@ -19,6 +20,7 @@ interface SyncResult {
 
 const SigenuSyncPage: React.FC = () => {
     const theme = useTheme();
+    const { token } = useAuth();
     const [loading, setLoading] = useState(false);
     const [result, setResult] = useState<SyncResult | null>(null);
     const [error, setError] = useState<string | null>(null);
@@ -31,7 +33,6 @@ const SigenuSyncPage: React.FC = () => {
                 throw new Error('Nombre de archivo inválido.');
             }
             
-            const token = localStorage.getItem('token');
             if (!token) {
                 throw new Error('No hay token de autenticación disponible.');
             }
@@ -71,7 +72,6 @@ const SigenuSyncPage: React.FC = () => {
         setResult(null);
 
         try {
-            const token = localStorage.getItem('token');
             const response = await fetch(`${API_BASE}/sigenu/sync/pending-grades`, {
                 method: 'POST',
                 headers: {

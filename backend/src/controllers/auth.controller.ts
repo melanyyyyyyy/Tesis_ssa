@@ -36,14 +36,14 @@ export const AuthController = {
         }
 
         if (!username || !password) {
-            res.status(400).json({ error: 'Username and password are required' });
+            res.status(400).json({ message: 'El nombre de usuario y la contraseña son obligatorios.' });
             return;
         }
 
         if (ENV.NODE_ENV !== 'production' && (username === 'test_secretary' || username === 'test_professor' || username === 'test_vicedean' || username === 'test_admin' || username === 'test_student')) {
             try {
                 if (password !== ENV.TEST_USER_PASSWORD) {
-                    res.status(401).json({ error: 'Invalid password for test user' });
+                    res.status(401).json({ message: 'Contraseña incorrecta para usuario de prueba.' });
                     return;
                 }
 
@@ -52,7 +52,7 @@ export const AuthController = {
                     const roleName = (user.roleId as any).name;
                     const token = generateToken(user, roleName);
                     res.json({
-                        message: 'Login successful (Test User)',
+                        message: 'Inicio de sesión exitoso (usuario de prueba)',
                         token,
                         user: {
                             _id: user._id,
@@ -77,6 +77,20 @@ export const AuthController = {
                     });
                     return;
                 }
+
+                if (!user || !user.roleId) {
+                    res.status(403).json({
+                        message: 'El usuario de prueba aún no está listo para iniciar sesión. Regrese más tarde.',
+                        userCreated: false,
+                        requiresRoleRequest: false,
+                        hasPendingRoleRequest: false,
+                        hasRejectedRoleRequest: false,
+                        pendingRoleRequest: null,
+                        userId: null
+                    });
+                    return;
+                }
+
             } catch (error) {
                 console.error('Test user login error:', error);
             }
@@ -98,7 +112,7 @@ export const AuthController = {
             const data: any = await apiResponse.json();
 
             if (!data.OK || !data.activeUser) {
-                res.status(401).json({ error: 'Authentication failed with external provider' });
+                res.status(401).json({ message: 'La autenticación con el proveedor externo falló.' });
                 return;
             }
             */
@@ -153,7 +167,7 @@ export const AuthController = {
 
                     const studentRole = await RoleModel.findOne({ name: 'student' });
                     if (!studentRole) {
-                        res.status(500).json({ error: 'System error: Student role not defined' });
+                        res.status(500).json({ message: 'Error del sistema: el rol de estudiante no está definido.' });
                         return;
                     }
                     roleIdToAssign = studentRole._id;
@@ -234,7 +248,7 @@ export const AuthController = {
 
             const token = generateToken(user, roleName);
             res.json({
-                message: 'Login successful',
+                message: 'Inicio de sesión exitoso',
                 token,
                 user: {
                     _id: user._id,
@@ -272,7 +286,7 @@ export const AuthController = {
             }
 
             res.status(500).json({
-                error: 'Internal error.',
+                message: 'Error interno.',
                 details: error.message
             });
             return;
@@ -295,7 +309,7 @@ export const AuthController = {
         } catch (error: any) {
             console.error('Get faculties for auth error:', error);
             res.status(500).json({
-                error: 'No se pudieron cargar las facultades.',
+                message: 'No se pudieron cargar las facultades.',
                 details: error.message
             });
         }
@@ -312,17 +326,17 @@ export const AuthController = {
             const allowedRoles = new Set(['admin', 'secretary', 'vicedean', 'professor']);
 
             if (!userId || !requestedRole) {
-                res.status(400).json({ error: 'userId y requestedRole son requeridos.' });
+                res.status(400).json({ message: 'userId y requestedRole son requeridos.' });
                 return;
             }
 
             if (!allowedRoles.has(requestedRole)) {
-                res.status(400).json({ error: 'El rol solicitado no es válido.' });
+                res.status(400).json({ message: 'El rol solicitado no es válido.' });
                 return;
             }
 
             if (rolesRequiringFaculty.has(requestedRole) && !facultyId) {
-                res.status(400).json({ error: 'Debe seleccionar una facultad para el rol solicitado.' });
+                res.status(400).json({ message: 'Debe seleccionar una facultad para el rol solicitado.' });
                 return;
             }
 
@@ -333,30 +347,30 @@ export const AuthController = {
             ]);
 
             if (!user) {
-                res.status(404).json({ error: 'Usuario no encontrado.' });
+                res.status(404).json({ message: 'Usuario no encontrado.' });
                 return;
             }
 
             if (user.roleId) {
-                res.status(409).json({ error: 'El usuario ya tiene un rol asignado.' });
+                res.status(409).json({ message: 'El usuario ya tiene un rol asignado.' });
                 return;
             }
 
             if (user.accessDenied) {
                 res.status(403).json({
-                    error: 'Su solicitud anterior fue rechazada. No puede enviar una nueva solicitud en este momento.',
+                    message: 'Su solicitud anterior fue rechazada. No puede enviar una nueva solicitud en este momento.',
                     hasRejectedRoleRequest: true
                 });
                 return;
             }
 
             if (rolesRequiringFaculty.has(requestedRole) && !faculty) {
-                res.status(404).json({ error: 'La facultad seleccionada no existe.' });
+                res.status(404).json({ message: 'La facultad seleccionada no existe.' });
                 return;
             }
 
             if (!roleDocument?._id) {
-                res.status(500).json({ error: 'El rol solicitado no está configurado en el sistema.' });
+                res.status(500).json({ message: 'El rol solicitado no está configurado en el sistema.' });
                 return;
             }
 
@@ -370,7 +384,7 @@ export const AuthController = {
 
             if (existingPendingRequestForUser) {
                 res.status(409).json({
-                    error: 'Ya existe una solicitud pendiente para este usuario.',
+                    message: 'Ya existe una solicitud pendiente para este usuario.',
                     hasPendingRoleRequest: true,
                     pendingRoleRequest: {
                         _id: String(existingPendingRequestForUser._id),
@@ -401,7 +415,7 @@ export const AuthController = {
         } catch (error: any) {
             console.error('Create role request error:', error);
             res.status(500).json({
-                error: 'No se pudo registrar la solicitud.',
+                message: 'No se pudo registrar la solicitud.',
                 details: error.message
             });
         }

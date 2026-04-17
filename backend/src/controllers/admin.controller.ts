@@ -83,10 +83,16 @@ async function getRequiredTestSigenuData() {
         throw new Error(SIGENU_IMPORT_REQUIRED_MESSAGE);
     }
 
+    /*
     const student = await StudentModel.findOne({
         careerId: career._id,
         academicYear: 2,
         isActive: true
+    })
+    */
+
+    const student = await StudentModel.findOne({
+        sigenId: '4d67d6f6:17741eee08b:4e47',
     })
         .select('_id identification firstName lastName')
         .sort({ firstName: 1, lastName: 1 })
@@ -309,11 +315,11 @@ export async function getRoleManagementUsers(req: Request, res: Response) {
                     : role?.name === 'vicedean'
                         ? vicedeanAssignment?.facultyId as { _id?: string; name?: string } | undefined
                         : undefined;
- 
+
             if (pendingRequest) {
                 assignedFaculty = pendingRequest.faculty;
             }
- 
+
             return {
                 _id: user._id,
                 requestId: pendingRequest?._id || null,
@@ -370,7 +376,7 @@ export async function approveRoleRequest(req: Request, res: Response) {
 
         const roleName = requestedRole.name;
         user.roleId = requestedRole._id;
-        user.accessDenied = false; 
+        user.accessDenied = false;
         await user.save();
 
         if (roleName === 'secretary') {
@@ -556,11 +562,11 @@ export async function updateRoleManagementUser(req: Request, res: Response) {
         }
 
         user.roleId = roleDocument?._id ?? null;
-        
+
         if (roleDocument) {
             user.accessDenied = false;
         }
-        
+
         await user.save();
 
         if (role === 'secretary') {
@@ -747,10 +753,10 @@ export async function getPendingGradesList(req: Request, res: Response) {
         const page = parseInt(req.query.page as string) || 0;
         const limit = parseInt(req.query.limit as string) || 50;
         const skip = page * limit;
-        
+
         const grades = await SyncService.getPendingGrades(skip, limit);
         const totalCount = await SyncService.getPendingGradesCount();
-        
+
         return res.status(200).json({
             data: grades,
             totalCount: totalCount,
@@ -771,10 +777,10 @@ export async function getLastExportGradesList(req: Request, res: Response) {
         const page = parseInt(req.query.page as string) || 0;
         const limit = parseInt(req.query.limit as string) || 50;
         const skip = page * limit;
-        
+
         const grades = await SyncService.getLastExportGrades(skip, limit);
         const totalCount = await SyncService.getLastExportGradesCount();
-        
+
         return res.status(200).json({
             data: grades,
             totalCount: totalCount.count,

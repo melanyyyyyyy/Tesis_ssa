@@ -9,6 +9,7 @@ import StorageIcon from '@mui/icons-material/Storage';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import MainLayout from '../../layouts/MainLayout';
 import PageHeader from '../../components/common/PageHeader';
+import { useAuth } from '../../context/AuthContext';
 
 const API_BASE = import.meta.env.VITE_API_BASE;
 const CHUNK_SIZE = 5 * 1024 * 1024;
@@ -23,6 +24,7 @@ interface UploadState {
 
 const SigenuImportPage: React.FC = () => {
     const theme = useTheme();
+    const { token } = useAuth();
     const [state, setState] = useState<UploadState>({
         file: null,
         progress: 0,
@@ -120,7 +122,6 @@ const SigenuImportPage: React.FC = () => {
             formData.append('fileId', fileId);
             formData.append('fileName', state.file!.name);
 
-            const token = localStorage.getItem('token');
             const response = await fetch(`${API_BASE}/sigenu/import/upload-chunk`, {
                 method: 'POST',
                 headers: {
@@ -148,7 +149,6 @@ const SigenuImportPage: React.FC = () => {
     };
 
     const handleMigrate = async (backupPath: string, signal?: AbortSignal) => {
-        const token = localStorage.getItem('token');
         const migrateRes = await fetch(`${API_BASE}/sigenu/import/migrate`, {
             method: 'POST',
             headers: {
@@ -184,7 +184,6 @@ const SigenuImportPage: React.FC = () => {
             }
 
             setState(prev => ({ ...prev, progress: 40, message: 'Verificando integridad y uniendo fragmentos...' }));
-            const token = localStorage.getItem('token');
             const mergeRes = await fetch(`${API_BASE}/sigenu/import/merge`, {
                 method: 'POST',
                 headers: {
