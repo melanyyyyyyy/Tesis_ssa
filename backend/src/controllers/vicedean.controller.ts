@@ -32,7 +32,6 @@ export const getProfessorRequests = async (req: Request, res: Response) => {
 
     const statusParam = req.query.status as string || 'all';
 
-    // 1. Get pending requests for this faculty and professor role
     const pendingRequests = await RoleRequestModel.find({
       faculty: facultyId,
       requestedRole: professorRole._id,
@@ -41,8 +40,6 @@ export const getProfessorRequests = async (req: Request, res: Response) => {
 
     const pendingUserIds = pendingRequests.map(r => (r.user as any)._id.toString());
 
-    // 2. Get users who ALREADY HAVE the professor role in this faculty (Approved)
-    // For professors, we check if they are assigned to ANY subject in this faculty
     const facultyCareers = await Career.find({ facultyId }).select('_id').lean();
     const careerIds = facultyCareers.map(c => c._id);
     
@@ -51,9 +48,6 @@ export const getProfessorRequests = async (req: Request, res: Response) => {
       .lean();
     const approvedUserIds = [...new Set(subjectsInFaculty.map(s => s.professorId?.toString()))].filter(Boolean);
 
-    // 3. Get users with accessDenied = true who attempted professor role in this faculty
-    // This is tricky since we delete the request on rejection. 
-    // For now, we'll show all users with accessDenied=true as "denied" if they don't have a role.
     const allUsers = await UserModel.find({
       $or: [
         { _id: { $in: pendingUserIds } },
@@ -104,15 +98,12 @@ export const approveProfessorRequest = async (req: Request, res: Response) => {
     const user = await UserModel.findById(targetUserId);
     if (!user) return res.status(404).json({ message: 'Usuario no encontrado' });
 
-    // 1. Assign role and reset accessDenied
     user.roleId = professorRole?._id as any;
     user.accessDenied = false;
     await user.save();
 
-    // 2. Assign to subject
     await Subject.findByIdAndUpdate(subjectId, { professorId: targetUserId });
 
-    // 3. Mark request as reviewed if exists
     await RoleRequestModel.findOneAndUpdate(
       { user: targetUserId as any, requestedRole: professorRole?._id, status: 'pending' },
       { status: 'reviewed' }
@@ -130,17 +121,14 @@ export const rejectProfessorRequest = async (req: Request, res: Response) => {
     const { userId: targetUserId } = req.params;
     const professorRole = await RoleModel.findOne({ name: 'professor' }).lean();
 
-    // 1. Set accessDenied = true
     await UserModel.findByIdAndUpdate(targetUserId, { accessDenied: true, roleId: null });
 
-    // 2. Delete request
     await RoleRequestModel.findOneAndDelete({
       user: targetUserId as any,
       requestedRole: professorRole?._id,
       status: 'pending'
     });
 
-    // 3. Remove from any subjects
     await Subject.updateMany({ professorId: targetUserId }, { $set: { professorId: null } });
 
     return res.status(200).json({ message: 'Solicitud rechazada correctamente' });

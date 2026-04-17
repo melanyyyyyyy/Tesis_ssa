@@ -77,8 +77,6 @@ export const getUserNotifications = async (req: Request, res: Response) => {
   }
 };
 
-// Endpoints para los ExamCalendar
-
 export const getExamCalendarEvents = async (req: Request, res: Response) => {
   try {
     const { careerId, academicYear } = req.query;

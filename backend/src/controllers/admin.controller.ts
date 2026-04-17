@@ -1224,7 +1224,7 @@ export async function getExaminationTypes(req: Request, res: Response) {
         return res.status(500).json({ success: false, error: error.message });
     }
 }
-//////////////////
+
 export async function getEvaluations(req: Request, res: Response) {
     try {
         const { facultyId, courseTypeId, careerId, academicYear, studentId } = req.query;

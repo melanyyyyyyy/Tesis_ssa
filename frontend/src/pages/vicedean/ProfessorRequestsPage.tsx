@@ -79,11 +79,9 @@ const ProfessorRequestsPage: React.FC = () => {
     const [infoMessage, setInfoMessage] = useState<string | null>(null);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
     
-    // Approval Dialog State
     const [approvalDialogOpen, setApprovalDialogOpen] = useState(false);
     const [selectedUser, setSelectedUser] = useState<ProfessorRequestUser | null>(null);
     
-    // Filter State for Approval Dialog
     const [courseTypes, setCourseTypes] = useState<CourseTypeOption[]>([]);
     const [careers, setCareers] = useState<CareerOption[]>([]);
     const [subjects, setSubjects] = useState<SubjectOption[]>([]);
@@ -93,7 +91,6 @@ const ProfessorRequestsPage: React.FC = () => {
     const [selectedSubjectId, setSelectedSubjectId] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    // Fetch Course Types for Dialog
     useEffect(() => {
         if (!approvalDialogOpen || !token) return;
         const fetchCourseTypes = async () => {
@@ -112,7 +109,6 @@ const ProfessorRequestsPage: React.FC = () => {
         void fetchCourseTypes();
     }, [approvalDialogOpen, token]);
 
-    // Fetch Careers when course type changes
     useEffect(() => {
         if (!selectedCourseTypeId || !token) {
             setCareers([]);
@@ -134,7 +130,6 @@ const ProfessorRequestsPage: React.FC = () => {
         void fetchCareers();
     }, [selectedCourseTypeId, token]);
 
-    // Fetch Subjects when career or year changes
     useEffect(() => {
         if (!selectedCareerId || !selectedAcademicYear || !selectedCourseTypeId || !token) {
             setSubjects([]);
@@ -164,7 +159,6 @@ const ProfessorRequestsPage: React.FC = () => {
     const handleOpenApproval = (user: ProfessorRequestUser) => {
         setSelectedUser(user);
         setApprovalDialogOpen(true);
-        // Reset filters
         setSelectedCourseTypeId('');
         setSelectedCareerId('');
         setSelectedAcademicYear('');
@@ -260,7 +254,6 @@ const ProfessorRequestsPage: React.FC = () => {
     const actions = useMemo<ReusableTableAction<ProfessorRequestUser>[]>(() => {
         const baseActions: ReusableTableAction<ProfessorRequestUser>[] = [];
         
-        // Approve action for pending and denied
         baseActions.push({
             variant: 'custom',
             label: 'Aprobar',
@@ -270,7 +263,6 @@ const ProfessorRequestsPage: React.FC = () => {
             hidden: (row) => row.status === 'approved'
         });
 
-        // Reject/Deny action for pending and approved
         baseActions.push({
             variant: 'custom',
             label: 'Denegar',
@@ -335,7 +327,6 @@ const ProfessorRequestsPage: React.FC = () => {
                     emptyMessage="No hay solicitudes para mostrar."
                 />
 
-                {/* Approval Dialog */}
                 <Dialog open={approvalDialogOpen} onClose={() => !isSubmitting && setApprovalDialogOpen(false)} fullWidth maxWidth="sm">
                     <DialogTitle>Aprobar Profesor y Asignar Asignatura</DialogTitle>
                     <DialogContent>

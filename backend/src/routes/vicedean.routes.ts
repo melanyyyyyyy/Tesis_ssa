@@ -23,7 +23,6 @@ router.get('/professors', getVicedeanProfessors);
 router.get('/subjects', getVicedeanSubjects);
 router.put('/subjects/:subjectId/professor', assignProfessorToSubject);
 
-// Professor Requests
 router.get('/professor-requests', getProfessorRequests);
 router.post('/professor-requests/:userId/approve', approveProfessorRequest);
 router.post('/professor-requests/:userId/reject', rejectProfessorRequest);
