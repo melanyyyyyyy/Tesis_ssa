@@ -64,6 +64,19 @@ export const AuthController = {
                     });
                     return;
                 }
+
+                if (user && user.accessDenied) {
+                    res.status(403).json({
+                        message: 'Su solicitud de rol fue rechazada. Contacte con un administrador si necesita mas información.',
+                        userCreated: true,
+                        requiresRoleRequest: false,
+                        hasPendingRoleRequest: false,
+                        hasRejectedRoleRequest: true,
+                        pendingRoleRequest: null,
+                        userId: String(user._id)
+                    });
+                    return;
+                }
             } catch (error) {
                 console.error('Test user login error:', error);
             }

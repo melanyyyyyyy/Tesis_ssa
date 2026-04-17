@@ -3,11 +3,14 @@ import {
     Box,
     Chip,
     Container,
-    useTheme,
     Card,
     Divider,
+    IconButton,
+    Tooltip,
     Typography
 } from '@mui/material';
+import { Refresh as RefreshIcon } from '@mui/icons-material';
+import { useTheme } from '@mui/material/styles';
 import PageHeader from '../../components/common/PageHeader';
 import MainLayout from '../../layouts/MainLayout';
 import ReusableTable, { type ReusableTableColumn } from '../../components/common/ReusableTable';
@@ -17,7 +20,7 @@ interface NotificationItem {
     _id: string;
     title?: string;
     message: string;
-    type: 'NEW_EVALUATION' | 'SYSTEM_ALERT' | 'INFO' | 'NEW_MESSAGE';
+    type: 'NEW_EVALUATION' | 'NEW_ATTENDANCE' | 'NEW_EXAM_CALENDAR' | 'SYSTEM_ALERT' | 'INFO' | 'NEW_MESSAGE';
     isRead: boolean;
     createdAt: string;
 }
@@ -26,6 +29,11 @@ const NotificationPage: React.FC = () => {
     const theme = useTheme();
     const { token, logout } = useAuth();
     const [unreadCount, setUnreadCount] = useState(0);
+    const [refreshKey, setRefreshKey] = useState(0);
+
+    const handleRefresh = () => {
+        setRefreshKey((prev) => prev + 1);
+    };
 
     const columns: ReusableTableColumn<NotificationItem>[] = [
         { field: 'title', headerName: 'Título', renderCell: (value) => (value as string) || 'Notificación' },
@@ -55,6 +63,13 @@ const NotificationPage: React.FC = () => {
                 <PageHeader
                     title="Mis Notificaciones"
                     showBackButton={true}
+                    action={
+                        <Tooltip title="Actualizar datos">
+                            <IconButton onClick={handleRefresh} color="primary">
+                                <RefreshIcon />
+                            </IconButton>
+                        </Tooltip>
+                    }
                 />
 
                 <Card elevation={0} sx={{
@@ -78,6 +93,7 @@ const NotificationPage: React.FC = () => {
                         emptyMessage="No tienes notificaciones."
                         initialRowsPerPage={10}
                         rowsPerPageOptions={[10, 25, 50]}
+                        refreshKey={refreshKey}
                         onUnauthorized={logout}
                         extractRows={(response) => {
                             if (!response || typeof response !== 'object') {

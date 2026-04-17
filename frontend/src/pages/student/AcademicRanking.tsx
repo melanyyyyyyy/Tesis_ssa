@@ -199,6 +199,7 @@ const StudentAcademicRanking: React.FC = () => {
                         columns={columns}
                         rowKey="_id"
                         serverPagination={true}
+                        initialRowsPerPage={50}
                         refreshKey={refreshKey}
                         tableAriaLabel="tabla de escalafón académico del estudiante"
                         emptyMessage="No hay datos de escalafón académico para tu grupo."

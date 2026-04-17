@@ -390,7 +390,7 @@ const ProfilePage: React.FC = () => {
                                         </Typography>
                                         <Chip
                                             label={profile.student.studentStatus?.kind || 'Sin estado'}
-                                            color="info"
+                                            color="secondary"
                                             size="small"
                                         />
                                     </Box>

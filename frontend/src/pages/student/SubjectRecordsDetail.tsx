@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from 'react';
-import { useLocation } from 'react-router-dom';
+import React, { useEffect, useMemo, useState } from 'react';
+import { useLocation, useSearchParams } from 'react-router-dom';
 import {
     Alert,
     Box,
@@ -62,29 +62,131 @@ interface AttendanceRecord {
 }
 
 const DETAIL_STORAGE_KEY = 'studentSelectedSubjectRecordsDetail';
+const API_BASE = import.meta.env.VITE_API_BASE;
 
 const SubjectRecordsDetail: React.FC = () => {
     const location = useLocation();
+    const [searchParams] = useSearchParams();
     const { token, logout, user } = useAuth();
     const [infoMessage, setInfoMessage] = useState<string | null>(null);
     const [refreshKey, setRefreshKey] = useState(0);
+    const [detail, setDetail] = useState<SubjectRecordsDetailState | null>(null);
+    const [isLoadingDetail, setIsLoadingDetail] = useState(true);
+    const [detailError, setDetailError] = useState<string | null>(null);
+    const subjectIdParam = searchParams.get('subjectId')?.trim() || '';
 
-    const detail = useMemo(() => {
+    useEffect(() => {
         const state = location.state as SubjectRecordsDetailState | null;
-        if (state?.subject) {
-            localStorage.setItem(DETAIL_STORAGE_KEY, JSON.stringify(state));
-            return state;
+        let isMounted = true;
+
+        const readSavedDetail = (): SubjectRecordsDetailState | null => {
+            const saved = localStorage.getItem(DETAIL_STORAGE_KEY);
+            if (!saved) return null;
+
+            try {
+                return JSON.parse(saved) as SubjectRecordsDetailState;
+            } catch {
+                localStorage.removeItem(DETAIL_STORAGE_KEY);
+                return null;
+            }
+        };
+
+        const loadDetail = async () => {
+            setIsLoadingDetail(true);
+            setDetailError(null);
+
+            if (state?.subject) {
+                localStorage.setItem(DETAIL_STORAGE_KEY, JSON.stringify(state));
+                if (isMounted) {
+                    setDetail(state);
+                    setIsLoadingDetail(false);
+                }
+                return;
+            }
+
+            const savedDetail = readSavedDetail();
+
+            if (subjectIdParam) {
+                if (savedDetail?.subject?.subjectId === subjectIdParam) {
+                    if (isMounted) {
+                        setDetail(savedDetail);
+                        setIsLoadingDetail(false);
+                    }
+                    return;
+                }
+
+                if (!token) {
+                    if (isMounted) {
+                        setDetail(null);
+                        setDetailError('No se pudo cargar el detalle de la asignatura.');
+                        setIsLoadingDetail(false);
+                    }
+                    return;
+                }
+
+                try {
+                    const response = await fetch(`${API_BASE}/student/records-summary`, {
+                        headers: {
+                            Authorization: `Bearer ${token}`
+                        }
+                    });
+
+                    if (!isMounted) return;
+
+                    if (response.status === 401) {
+                        logout();
+                        return;
+                    }
+
+                    if (!response.ok) {
+                        throw new Error('No se pudo obtener el resumen de registros.');
+                    }
+
+                    const payload = await response.json() as { data?: StudentSubjectRecordSummary[] };
+                    const matchedSubject = payload.data?.find((item) => item.subjectId === subjectIdParam) || null;
+
+                    if (!matchedSubject) {
+                        setDetail(null);
+                        setDetailError('No se encontró la asignatura asociada a esta notificación.');
+                        setIsLoadingDetail(false);
+                        return;
+                    }
+
+                    const nextDetail = { subject: matchedSubject };
+                    localStorage.setItem(DETAIL_STORAGE_KEY, JSON.stringify(nextDetail));
+                    setDetail(nextDetail);
+                } catch {
+                    if (!isMounted) return;
+                    setDetail(null);
+                    setDetailError('No se pudo cargar el detalle de la asignatura.');
+                } finally {
+                    if (isMounted) {
+                        setIsLoadingDetail(false);
+                    }
+                }
+                return;
+            }
+
+            if (savedDetail) {
+                if (isMounted) {
+                    setDetail(savedDetail);
+                    setIsLoadingDetail(false);
+                }
+                return;
+            }
+
+            if (isMounted) {
+                setDetail(null);
+                setIsLoadingDetail(false);
+            }
         }
 
-        const saved = localStorage.getItem(DETAIL_STORAGE_KEY);
-        if (!saved) return null;
+        void loadDetail();
 
-        try {
-            return JSON.parse(saved) as SubjectRecordsDetailState;
-        } catch {
-            return null;
-        }
-    }, [location.state]);
+        return () => {
+            isMounted = false;
+        };
+    }, [location.state, logout, subjectIdParam, token]);
 
     const evaluationColumns = useMemo<ReusableTableColumn<EvaluationRecord>[]>(() => [
         {
@@ -206,12 +308,24 @@ const SubjectRecordsDetail: React.FC = () => {
         return fullName || 'estudiante';
     }, [user?.firstName, user?.lastName]);
 
+    if (isLoadingDetail) {
+        return (
+            <MainLayout>
+                <Container maxWidth="xl" sx={{ py: 4 }}>
+                    <Alert severity="info" sx={{ mb: 3, borderRadius: 2 }}>
+                        Cargando detalle de la asignatura...
+                    </Alert>
+                </Container>
+            </MainLayout>
+        );
+    }
+
     if (!detail) {
         return (
             <MainLayout>
                 <Container maxWidth="xl" sx={{ py: 4 }}>
-                    <Alert severity="warning" sx={{ mb: 3, borderRadius: 2 }}>
-                        Debes seleccionar primero una asignatura desde tus registros.
+                    <Alert severity={detailError ? 'error' : 'warning'} sx={{ mb: 3, borderRadius: 2 }}>
+                        {detailError || 'Debes seleccionar primero una asignatura desde tus registros.'}
                     </Alert>
                 </Container>
             </MainLayout>

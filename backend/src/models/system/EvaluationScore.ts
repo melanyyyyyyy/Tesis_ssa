@@ -20,6 +20,123 @@ export interface IEvaluationScore extends Document {
   updatedAt: Date;
 }
 
+type EvaluationNotificationAction = 'created' | 'updated';
+
+const EVALUATION_NOTIFICATION_REFERENCE_MODEL = 'EvaluationScore';
+const STUDENT_SUBJECT_DETAIL_PATH = '/student/subject-records-detail';
+const NON_NOTIFIABLE_EVALUATION_FIELDS = new Set([
+  'registrationDate',
+  'sigenId',
+  'createdAt',
+  'updatedAt'
+]);
+
+function getNotificationAction(isNew: boolean, paths: string[]): EvaluationNotificationAction | null {
+  if (isNew) {
+    return 'created';
+  }
+
+  const hasMeaningfulChanges = paths.some((path) => !NON_NOTIFIABLE_EVALUATION_FIELDS.has(path));
+  return hasMeaningfulChanges ? 'updated' : null;
+}
+
+function getMeaningfulUpdatePaths(update: Record<string, any> | null | undefined): string[] {
+  if (!update || typeof update !== 'object') {
+    return [];
+  }
+
+  const updatedPaths = new Set<string>();
+  const collectPaths = (value: Record<string, any> | null | undefined) => {
+    if (!value || typeof value !== 'object') {
+      return;
+    }
+
+    Object.keys(value).forEach((key) => {
+      if (!key.startsWith('$')) {
+        updatedPaths.add(key.split('.')[0]);
+      }
+    });
+  };
+
+  collectPaths(update);
+  collectPaths(update.$set);
+  collectPaths(update.$unset);
+
+  return Array.from(updatedPaths).filter((path) => !NON_NOTIFIABLE_EVALUATION_FIELDS.has(path));
+}
+
+async function resolveEvaluationNotificationContext(matriculatedSubjectId: Types.ObjectId | string) {
+  const MatriculatedSubject = model('MatriculatedSubject');
+  const Subject = model('Subject');
+  const User = model('User');
+
+  const matriculatedSubject = await MatriculatedSubject.findById(matriculatedSubjectId)
+    .select('studentId subjectId')
+    .lean() as { studentId?: Types.ObjectId; subjectId?: Types.ObjectId } | null;
+
+  if (!matriculatedSubject?.studentId || !matriculatedSubject?.subjectId) {
+    return null;
+  }
+
+  const [studentUser, subject] = await Promise.all([
+    User.findOne({ studentId: matriculatedSubject.studentId }).select('_id').lean() as Promise<{ _id: Types.ObjectId } | null>,
+    Subject.findById(matriculatedSubject.subjectId).select('name').lean() as Promise<{ name?: string } | null>
+  ]);
+
+  if (!studentUser?._id || !subject?.name) {
+    return null;
+  }
+
+  return {
+    recipientId: studentUser._id,
+    subjectId: String(matriculatedSubject.subjectId),
+    subjectName: subject.name
+  };
+}
+
+async function createEvaluationNotification(
+  evaluationId: Types.ObjectId | string,
+  matriculatedSubjectId: Types.ObjectId | string,
+  action: EvaluationNotificationAction
+) {
+  try {
+    const context = await resolveEvaluationNotificationContext(matriculatedSubjectId);
+    if (!context) {
+      return;
+    }
+
+    const Notification = model('Notification');
+    const message = action === 'created'
+      ? `Se te ha añadido una nueva evaluación en la asignatura ${context.subjectName}.`
+      : `Se ha modificado la evaluación de la asignatura ${context.subjectName}.`;
+
+    await Notification.create({
+      recipientId: context.recipientId,
+      title: action === 'created' ? 'Nueva evaluación' : 'Evaluación modificada',
+      message,
+      type: 'NEW_EVALUATION',
+      link: `${STUDENT_SUBJECT_DETAIL_PATH}?subjectId=${encodeURIComponent(context.subjectId)}`,
+      referenceModel: EVALUATION_NOTIFICATION_REFERENCE_MODEL,
+      referenceId: evaluationId
+    });
+  } catch (error) {
+    console.error('Error creating evaluation notification:', error);
+  }
+}
+
+async function deleteEvaluationNotifications(evaluationId: Types.ObjectId | string) {
+  try {
+    const Notification = model('Notification');
+    await Notification.deleteMany({
+      type: 'NEW_EVALUATION',
+      referenceModel: EVALUATION_NOTIFICATION_REFERENCE_MODEL,
+      referenceId: evaluationId
+    });
+  } catch (error) {
+    console.error('Error deleting evaluation notifications:', error);
+  }
+}
+
 const EvaluationScoreSchema = new Schema<IEvaluationScore>({
   studentId: {
     type: Schema.Types.ObjectId,
@@ -80,6 +197,19 @@ EvaluationScoreSchema.index({ studentId: 1, matriculatedSubjectId: 1 });
 EvaluationScoreSchema.index({ studentId: 1, matriculatedSubjectId: 1, category: 1 });
 EvaluationScoreSchema.index({ studentId: 1, evaluationDate: -1 });
 EvaluationScoreSchema.index({ matriculatedSubjectId: 1, evaluationDate: -1 });
+
+EvaluationScoreSchema.pre('save', function () {
+  this.$locals.notificationAction = getNotificationAction(this.isNew, this.modifiedPaths());
+});
+
+EvaluationScoreSchema.pre('findOneAndUpdate', async function () {
+  const update = this.getUpdate() as Record<string, any> | null;
+  this.setOptions({
+    ...this.getOptions(),
+    new: true
+  });
+  (this as any)._notificationAction = getMeaningfulUpdatePaths(update).length > 0 ? 'updated' : null;
+});
 
 async function updateSyncNotification(EvaluationModel: any) {
   try {
@@ -149,16 +279,30 @@ async function updateSyncNotification(EvaluationModel: any) {
 }
 
 EvaluationScoreSchema.post('save', async function () {
+  const action = this.$locals.notificationAction as EvaluationNotificationAction | null | undefined;
+  if (action) {
+    await createEvaluationNotification(this._id, this.matriculatedSubjectId, action);
+  }
   await updateSyncNotification(this.constructor);
+});
+
+EvaluationScoreSchema.post('findOneAndUpdate', async function (doc) {
+  const action = (this as any)._notificationAction as EvaluationNotificationAction | null | undefined;
+  if (action && doc?._id && doc?.matriculatedSubjectId) {
+    await createEvaluationNotification(doc._id, doc.matriculatedSubjectId, action);
+  }
+  await updateSyncNotification(this.model);
 });
 
 EvaluationScoreSchema.post('findOneAndDelete', async function (doc) {
   if (doc) {
+    await deleteEvaluationNotifications(doc._id);
     await updateSyncNotification(this.model);
   }
 });
 
 EvaluationScoreSchema.post('deleteOne', { document: true, query: false }, async function () {
+  await deleteEvaluationNotifications(this._id);
   await updateSyncNotification(this.constructor);
 });
 

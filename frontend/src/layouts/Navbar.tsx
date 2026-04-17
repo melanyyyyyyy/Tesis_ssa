@@ -22,7 +22,7 @@ interface Notification {
     _id: string;
     title?: string;
     message: string;
-    type: 'NEW_EVALUATION' | 'SYSTEM_ALERT' | 'INFO' | 'NEW_MESSAGE';
+    type: 'NEW_EVALUATION' | 'NEW_ATTENDANCE' | 'NEW_EXAM_CALENDAR' | 'SYSTEM_ALERT' | 'INFO' | 'NEW_MESSAGE';
     isRead: boolean;
     link?: string;
     createdAt: string;
@@ -130,6 +130,8 @@ export const Navbar = () => {
         switch (type) {
             case 'SYSTEM_ALERT': return <WarningIcon color="error" fontSize="small" />;
             case 'NEW_EVALUATION': return <CheckCircleIcon color="success" fontSize="small" />;
+            case 'NEW_ATTENDANCE': return <CheckCircleIcon color="success" fontSize="small" />;
+            case 'NEW_EXAM_CALENDAR': return <InfoIcon color="primary" fontSize="small" />;
             case 'NEW_MESSAGE': return <ChatIcon color="primary" fontSize="small" />;
             case 'INFO': default: return <InfoIcon color="info" fontSize="small" />;
         }
