@@ -15,10 +15,20 @@ export async function uploadChunk(req: Request, res: Response) {
             return res.status(400).json({ error: "No file chunk received." });
         }
 
-        await FileService.saveChunk(fileId, parseInt(chunkIndex), file.path);
+        if (!fileId || typeof fileId !== "string") {
+            return res.status(400).json({ error: "Missing or invalid fileId." });
+        }
+
+        const parsedChunkIndex = Number.parseInt(chunkIndex, 10);
+        if (Number.isNaN(parsedChunkIndex)) {
+            return res.status(400).json({ error: "Missing or invalid chunkIndex." });
+        }
+
+        await FileService.saveChunk(fileId, parsedChunkIndex, file.path);
         return res.status(200).json({ message: "Chunk uploaded successfully" });
 
     } catch (error: any) {
+        console.error("[SIGENU] uploadChunk failed:", error);
         return res.status(500).json({ error: error.message });
     }
 }

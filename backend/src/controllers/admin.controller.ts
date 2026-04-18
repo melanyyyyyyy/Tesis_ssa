@@ -88,11 +88,14 @@ async function getRequiredTestSigenuData() {
         careerId: career._id,
         academicYear: 2,
         isActive: true
+        sigenId: '4d67d6f6:17741eee08b:4e47',
     })
     */
 
     const student = await StudentModel.findOne({
-        sigenId: '4d67d6f6:17741eee08b:4e47',
+        careerId: career._id,
+        academicYear: 2,
+        isActive: true
     })
         .select('_id identification firstName lastName')
         .sort({ firstName: 1, lastName: 1 })

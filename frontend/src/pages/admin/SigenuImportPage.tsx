@@ -116,11 +116,11 @@ const SigenuImportPage: React.FC = () => {
     const uploadChunk = async (chunkIndex: number, chunk: Blob, totalChunks: number, fileId: string): Promise<boolean> => {
         try {
             const formData = new FormData();
-            formData.append('chunk', chunk);
             formData.append('chunkIndex', chunkIndex.toString());
             formData.append('totalChunks', totalChunks.toString());
             formData.append('fileId', fileId);
             formData.append('fileName', state.file!.name);
+            formData.append('chunk', chunk);
 
             const response = await fetch(`${API_BASE}/sigenu/import/upload-chunk`, {
                 method: 'POST',
@@ -131,7 +131,11 @@ const SigenuImportPage: React.FC = () => {
                 signal: abortController.current?.signal
             });
 
-            if (!response.ok) throw new Error(`Error en la subida: ${response.status}`);
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => null);
+                const errorMessage = errorData?.error || errorData?.message || `Error en la subida: ${response.status}`;
+                throw new Error(errorMessage);
+            }
 
             const uploadPercentage = ((chunkIndex + 1) / totalChunks) * 40;
 
