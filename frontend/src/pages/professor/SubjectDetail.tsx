@@ -154,21 +154,30 @@ const SubjectDetail: React.FC = () => {
                             <Typography variant="h6">Acciones</Typography>
                         </Box>
                         <Divider sx={{ mb: 2 }} />
-                <Stack 
-                    direction={{ xs: 'column', sm: 'row' }} 
-                    spacing={2} 
-                    sx={{ 
-                        mb: 3, 
-                        flexWrap: 'wrap',
-                        gap: 1 
-                    }}
-                >
+                        <Box
+                            sx={{
+                                mb: 3,
+                                display: 'grid',
+                                gridTemplateColumns: {
+                                    xs: '1fr',
+                                    md: 'repeat(3, minmax(0, 1fr))',
+                                    xl: 'repeat(6, minmax(0, 1fr))'
+                                },
+                                gap: 2
+                            }}
+                        >
                     <Button 
                         variant="contained" 
                         color="secondary"
                         disableElevation
                         startIcon={<AttendanceIcon />}
                         disabled={!selectedSubject}
+                        sx={{
+                            width: '100%',
+                            minHeight: 48,
+                            justifyContent: 'flex-start',
+                            textAlign: 'left'
+                        }}
                         onClick={() => selectedSubject && navigate('/professor/register-attendance', {
                             state: { subject: selectedSubject }
                         })}
@@ -182,6 +191,12 @@ const SubjectDetail: React.FC = () => {
                         disableElevation
                         startIcon={<EvaluationIcon />}
                         disabled={!selectedSubject}
+                        sx={{
+                            width: '100%',
+                            minHeight: 48,
+                            justifyContent: 'flex-start',
+                            textAlign: 'left'
+                        }}
                         onClick={() => selectedSubject && navigate('/professor/register-evaluation', {
                             state: { subject: selectedSubject }
                         })}
@@ -195,6 +210,12 @@ const SubjectDetail: React.FC = () => {
                         disableElevation
                         startIcon={<CalendarIcon />}
                         disabled={!selectedSubject}
+                        sx={{
+                            width: '100%',
+                            minHeight: 48,
+                            justifyContent: 'flex-start',
+                            textAlign: 'left'
+                        }}
                         onClick={() => selectedSubject && navigate('/professor/exams', {
                             state: {
                                 subjectId: selectedSubject._id,
@@ -215,6 +236,12 @@ const SubjectDetail: React.FC = () => {
                         disableElevation
                         startIcon={<HistoryIcon />}
                         disabled={!selectedSubject}
+                        sx={{
+                            width: '100%',
+                            minHeight: 48,
+                            justifyContent: 'flex-start',
+                            textAlign: 'left'
+                        }}
                         onClick={() => selectedSubject && navigate('/professor/history-records', {
                             state: { subject: selectedSubject }
                         })}
@@ -228,6 +255,12 @@ const SubjectDetail: React.FC = () => {
                         disableElevation
                         startIcon={<RankingIcon />}
                         disabled={!selectedSubject}
+                        sx={{
+                            width: '100%',
+                            minHeight: 48,
+                            justifyContent: 'flex-start',
+                            textAlign: 'left'
+                        }}
                         onClick={() => selectedSubject && navigate('/professor/academic-ranking', {
                             state: { subject: selectedSubject }
                         })}
@@ -240,13 +273,19 @@ const SubjectDetail: React.FC = () => {
                         color="primary"
                         startIcon={<ChatIcon />}
                         disabled={!selectedSubject}
+                        sx={{
+                            width: '100%',
+                            minHeight: 48,
+                            justifyContent: 'flex-start',
+                            textAlign: 'left'
+                        }}
                         onClick={() => selectedSubject && navigate('/professor/chat', {
                             state: { subject: selectedSubject }
                         })}
                     >
                         Chat
                     </Button>
-                </Stack>
+                        </Box>
                     </Card>
                     <Card elevation={0} sx={{
                         p: 4,

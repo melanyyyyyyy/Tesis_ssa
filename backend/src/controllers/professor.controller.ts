@@ -597,12 +597,46 @@ export async function getProfessorSubjects(req: Request, res: Response) {
 }
 
 type EvaluationRowForAverage = {
+    sigenId?: string;
     matriculatedSubjectId: unknown;
     category: EvaluationCategory;
     evaluationValueId?: { value?: string } | null;
 };
 
 const getSubjectStudentKey = (subjectId: string, studentId: string) => `${subjectId}:${studentId}`;
+
+const mergeLegacyFinalEvaluationsForAverage = (
+    evaluationRowsByMatriculated: Map<string, EvaluationRowForAverage[]>,
+    legacyEvaluationRows: Array<{
+        sigenId?: string;
+        matriculatedSubjectId: unknown;
+        evaluationValueId?: { value?: string } | null;
+    }>
+) => {
+    legacyEvaluationRows.forEach((evaluation) => {
+        const key = String(evaluation.matriculatedSubjectId);
+        const current = evaluationRowsByMatriculated.get(key) || [];
+        const legacySigenId = String(evaluation.sigenId || '').trim();
+        const syncedFinalSigenIds = new Set(
+            current
+                .filter((row) => row.category === EvaluationCategory.FINAL_EVALUATION)
+                .map((row) => String(row.sigenId || '').trim())
+                .filter(Boolean)
+        );
+
+        if (legacySigenId && syncedFinalSigenIds.has(legacySigenId)) {
+            return;
+        }
+
+        current.push({
+            sigenId: legacySigenId || undefined,
+            matriculatedSubjectId: evaluation.matriculatedSubjectId,
+            category: EvaluationCategory.FINAL_EVALUATION,
+            evaluationValueId: evaluation.evaluationValueId
+        });
+        evaluationRowsByMatriculated.set(key, current);
+    });
+};
 
 const calculateSubjectEvaluationAverageForStudent = (
     subjectId: string,
@@ -1160,13 +1194,13 @@ export async function getAcademicRanking(req: Request, res: Response) {
                 matriculatedSubjectId: { $in: allMatriculatedIds }
             })
                 .populate('evaluationValueId', 'value')
-                .select('matriculatedSubjectId category evaluationValueId')
+                .select('sigenId matriculatedSubjectId category evaluationValueId')
                 .lean(),
             EvaluationModel.find({
                 matriculatedSubjectId: { $in: allMatriculatedIds }
             })
                 .populate('evaluationValueId', 'value')
-                .select('matriculatedSubjectId evaluationValueId')
+                .select('sigenId matriculatedSubjectId evaluationValueId')
                 .lean()
         ]);
 
@@ -1223,21 +1257,14 @@ export async function getAcademicRanking(req: Request, res: Response) {
             evaluationRowsByMatriculated.set(key, current);
         });
 
-        legacyEvaluationRows.forEach((evaluation) => {
-            const key = String(evaluation.matriculatedSubjectId);
-            const current = evaluationRowsByMatriculated.get(key) || [];
-            const hasFinalFromScore = current.some(
-                (row) => row.category === EvaluationCategory.FINAL_EVALUATION
-            );
-            if (hasFinalFromScore) return;
-
-            current.push({
-                matriculatedSubjectId: evaluation.matriculatedSubjectId,
-                category: EvaluationCategory.FINAL_EVALUATION,
-                evaluationValueId: evaluation.evaluationValueId as { value?: string } | null
-            });
-            evaluationRowsByMatriculated.set(key, current);
-        });
+        mergeLegacyFinalEvaluationsForAverage(
+            evaluationRowsByMatriculated,
+            legacyEvaluationRows as Array<{
+                sigenId?: string;
+                matriculatedSubjectId: unknown;
+                evaluationValueId?: { value?: string } | null;
+            }>
+        );
 
         const rankingRows = currentSubjectEnrollments.map((item) => {
             const studentRecord = item.studentId as unknown as Record<string, unknown> | null;
