@@ -166,125 +166,125 @@ const SubjectDetail: React.FC = () => {
                                 gap: 2
                             }}
                         >
-                    <Button 
-                        variant="contained" 
-                        color="secondary"
-                        disableElevation
-                        startIcon={<AttendanceIcon />}
-                        disabled={!selectedSubject}
-                        sx={{
-                            width: '100%',
-                            minHeight: 48,
-                            justifyContent: 'flex-start',
-                            textAlign: 'left'
-                        }}
-                        onClick={() => selectedSubject && navigate('/professor/register-attendance', {
-                            state: { subject: selectedSubject }
-                        })}
-                    >
-                        Añadir registro de asistencia
-                    </Button>
+                            <Button
+                                variant="contained"
+                                color="secondary"
+                                disableElevation
+                                startIcon={<AttendanceIcon />}
+                                disabled={!selectedSubject}
+                                sx={{
+                                    width: '100%',
+                                    minHeight: 48,
+                                    justifyContent: 'flex-start',
+                                    textAlign: 'left'
+                                }}
+                                onClick={() => selectedSubject && navigate('/professor/register-attendance', {
+                                    state: { subject: selectedSubject }
+                                })}
+                            >
+                                Añadir registro de asistencia
+                            </Button>
 
-                    <Button 
-                        variant="contained" 
-                        color="secondary"
-                        disableElevation
-                        startIcon={<EvaluationIcon />}
-                        disabled={!selectedSubject}
-                        sx={{
-                            width: '100%',
-                            minHeight: 48,
-                            justifyContent: 'flex-start',
-                            textAlign: 'left'
-                        }}
-                        onClick={() => selectedSubject && navigate('/professor/register-evaluation', {
-                            state: { subject: selectedSubject }
-                        })}
-                    >
-                        Añadir registro de evaluación
-                    </Button>
+                            <Button
+                                variant="contained"
+                                color="secondary"
+                                disableElevation
+                                startIcon={<EvaluationIcon />}
+                                disabled={!selectedSubject}
+                                sx={{
+                                    width: '100%',
+                                    minHeight: 48,
+                                    justifyContent: 'flex-start',
+                                    textAlign: 'left'
+                                }}
+                                onClick={() => selectedSubject && navigate('/professor/register-evaluation', {
+                                    state: { subject: selectedSubject }
+                                })}
+                            >
+                                Añadir registro de evaluación
+                            </Button>
 
-                    <Button 
-                        variant="contained" 
-                        color="primary"
-                        disableElevation
-                        startIcon={<CalendarIcon />}
-                        disabled={!selectedSubject}
-                        sx={{
-                            width: '100%',
-                            minHeight: 48,
-                            justifyContent: 'flex-start',
-                            textAlign: 'left'
-                        }}
-                        onClick={() => selectedSubject && navigate('/professor/exams', {
-                            state: {
-                                subjectId: selectedSubject._id,
-                                subjectName: selectedSubject.name,
-                                careerId: typeof selectedSubject.careerId === 'string' 
-                                    ? selectedSubject.careerId 
-                                    : selectedSubject.careerId?._id || '',
-                                academicYear: selectedSubject.academicYear
-                            }
-                        })}
-                    >
-                        Calendario de exámenes
-                    </Button>
+                            <Button
+                                variant="contained"
+                                color="primary"
+                                disableElevation
+                                startIcon={<CalendarIcon />}
+                                disabled={!selectedSubject}
+                                sx={{
+                                    width: '100%',
+                                    minHeight: 48,
+                                    justifyContent: 'flex-start',
+                                    textAlign: 'left'
+                                }}
+                                onClick={() => selectedSubject && navigate('/professor/exams', {
+                                    state: {
+                                        subjectId: selectedSubject._id,
+                                        subjectName: selectedSubject.name,
+                                        careerId: typeof selectedSubject.careerId === 'string'
+                                            ? selectedSubject.careerId
+                                            : selectedSubject.careerId?._id || '',
+                                        academicYear: selectedSubject.academicYear
+                                    }
+                                })}
+                            >
+                                Calendario de exámenes
+                            </Button>
 
-                    <Button 
-                        variant="contained" 
-                        color="primary"
-                        disableElevation
-                        startIcon={<HistoryIcon />}
-                        disabled={!selectedSubject}
-                        sx={{
-                            width: '100%',
-                            minHeight: 48,
-                            justifyContent: 'flex-start',
-                            textAlign: 'left'
-                        }}
-                        onClick={() => selectedSubject && navigate('/professor/history-records', {
-                            state: { subject: selectedSubject }
-                        })}
-                    >
-                        Historial de registros
-                    </Button>
+                            <Button
+                                variant="contained"
+                                color="primary"
+                                disableElevation
+                                startIcon={<HistoryIcon />}
+                                disabled={!selectedSubject}
+                                sx={{
+                                    width: '100%',
+                                    minHeight: 48,
+                                    justifyContent: 'flex-start',
+                                    textAlign: 'left'
+                                }}
+                                onClick={() => selectedSubject && navigate('/professor/history-records', {
+                                    state: { subject: selectedSubject }
+                                })}
+                            >
+                                Historial de registros
+                            </Button>
 
-                    <Button 
-                        variant="contained" 
-                        color="primary"
-                        disableElevation
-                        startIcon={<RankingIcon />}
-                        disabled={!selectedSubject}
-                        sx={{
-                            width: '100%',
-                            minHeight: 48,
-                            justifyContent: 'flex-start',
-                            textAlign: 'left'
-                        }}
-                        onClick={() => selectedSubject && navigate('/professor/academic-ranking', {
-                            state: { subject: selectedSubject }
-                        })}
-                    >
-                        Escalafón Académico
-                    </Button>
+                            <Button
+                                variant="contained"
+                                color="primary"
+                                disableElevation
+                                startIcon={<RankingIcon />}
+                                disabled={!selectedSubject}
+                                sx={{
+                                    width: '100%',
+                                    minHeight: 48,
+                                    justifyContent: 'flex-start',
+                                    textAlign: 'left'
+                                }}
+                                onClick={() => selectedSubject && navigate('/professor/academic-ranking', {
+                                    state: { subject: selectedSubject }
+                                })}
+                            >
+                                Escalafón Académico
+                            </Button>
 
-                    <Button 
-                        variant="outlined" 
-                        color="primary"
-                        startIcon={<ChatIcon />}
-                        disabled={!selectedSubject}
-                        sx={{
-                            width: '100%',
-                            minHeight: 48,
-                            justifyContent: 'flex-start',
-                            textAlign: 'left'
-                        }}
-                        onClick={() => selectedSubject && navigate('/professor/chat', {
-                            state: { subject: selectedSubject }
-                        })}
-                    >
-                        Chat
-                    </Button>
+                            <Button
+                                variant="outlined"
+                                color="primary"
+                                startIcon={<ChatIcon />}
+                                disabled={!selectedSubject}
+                                sx={{
+                                    width: '100%',
+                                    minHeight: 48,
+                                    justifyContent: 'flex-start',
+                                    textAlign: 'left'
+                                }}
+                                onClick={() => selectedSubject && navigate('/professor/chat', {
+                                    state: { subject: selectedSubject }
+                                })}
+                            >
+                                Chat
+                            </Button>
                         </Box>
                     </Card>
                     <Card elevation={0} sx={{
