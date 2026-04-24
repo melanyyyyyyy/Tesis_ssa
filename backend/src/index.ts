@@ -18,6 +18,7 @@ import {
 } from "./routes/index.js";
 import { ENV } from "./config/envs.js";
 import { setChatSocketServer } from "./services/chat.service.js";
+import { ensureRolesAndAdmin } from "./scripts/seedRoles.js";
 
 dotenv.config();
 
@@ -59,15 +60,23 @@ const io = new Server(httpServer, {
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH']
   }
 });
-
+ 
 setChatSocketServer(io);
 
-const server = httpServer.listen(PORT, () => {
-  console.log(`Server listening on port ${PORT}`);
+async function bootstrap(): Promise<void> {
+  await connectDatabase();
+  await ensureRolesAndAdmin({ manageConnection: false });
+
+  const server = httpServer.listen(PORT, () => {
+    console.log(`Server listening on port ${PORT}`);
+  });
+
+  server.requestTimeout = 10 * 60 * 1000;
+  server.headersTimeout = 10 * 60 * 1000 + 1000;
+  server.keepAliveTimeout = 65 * 1000;
+}
+
+bootstrap().catch((error) => {
+  console.error("Backend startup failed:", error);
+  process.exit(1);
 });
-
-server.requestTimeout = 10 * 60 * 1000; 
-server.headersTimeout = 10 * 60 * 1000 + 1000; 
-server.keepAliveTimeout = 65 * 1000; 
-
-connectDatabase();

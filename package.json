@@ -1,0 +1,27 @@
+{
+  "name": "ssa",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "install-all": "npm install && cd frontend && npm install && cd ../backend && npm install",
+    "backend": "cd backend && npm run dev",
+    "frontend": "cd frontend && npm run dev",
+    "dev": "concurrently \"npm run backend\" \"npm run frontend\""
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/melanyyyyyyy/Tesis_ssa.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/melanyyyyyyy/Tesis_ssa/issues"
+  },
+  "homepage": "https://github.com/melanyyyyyyy/Tesis_ssa#readme",
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}

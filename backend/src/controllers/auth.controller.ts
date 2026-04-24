@@ -97,7 +97,8 @@ export const AuthController = {
         }
 
         try {
-            /*
+            
+            //////// EN EL CASO DE QUE EL AGA ESTÉ CAIDO, COMENTE ESTO
             const apiResponse = await fetch('https://auth.uho.edu.cu/login', {
                 method: 'POST',
                 headers: {
@@ -115,8 +116,9 @@ export const AuthController = {
                 res.status(401).json({ message: 'La autenticación con el proveedor externo falló.' });
                 return;
             }
-            */
+            //////////  
 
+            /* DESCOMENTA ESTO
             const data: any = {
                 activeUser: {
                     status: 200,
@@ -146,6 +148,7 @@ export const AuthController = {
                     message: "Inició sesión"
                 }
             };
+            */
 
             const { personal_information, uid } = data.activeUser;
             const dni = personal_information.dni;
